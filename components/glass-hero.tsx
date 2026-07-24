@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import site from "@/content/site.json";
 
 const DESKTOP_RADIUS = 235;
-const MOBILE_RADIUS = 150;
+const MOBILE_RADIUS = 250;
 
 export default function GlassHero() {
   const heroRef = useRef<HTMLDivElement>(null);
