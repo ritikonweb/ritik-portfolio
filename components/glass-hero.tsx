@@ -74,9 +74,9 @@ export default function GlassHero() {
           <h1 id="hero-title" className="hero-heading" aria-label={site.hero.headingLines.join(" ")}>{site.hero.headingLines.map((line, index) => <span aria-hidden="true" key={`${line}-${index}`}>{line}</span>)}</h1>
           <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer">{site.hero.primaryAction}</a><a className="text-link" href="#experience">{site.hero.secondaryAction}</a></div>
         </div>
-        <div ref={heroRef} className="hero-media" onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
-          <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.png" width="1672" height="941" alt="Portrait of Ritik Yadav" />
-          <img className="portrait-layer reveal-portrait" src="/images/Reveal_image_desktop.png" width="1672" height="941" alt="" aria-hidden="true" />
+        <div ref={heroRef} className="hero-media" onContextMenu={(e) => e.preventDefault()} onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
+          <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.png" width="1672" height="941" alt="Portrait of Ritik Yadav" draggable={false} />
+          <img className="portrait-layer reveal-portrait" src="/images/Reveal_image_desktop.png" width="1672" height="941" alt="" aria-hidden="true" draggable={false} />
           <div className="technical-layer" aria-hidden="true" />
         </div>
       </div>
