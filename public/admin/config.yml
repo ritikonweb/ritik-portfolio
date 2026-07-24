@@ -1,0 +1,141 @@
+backend:
+  name: github
+  repo: ritikonweb/ritik-portfolio
+  branch: main
+
+local_backend: true
+media_folder: public/uploads
+public_folder: /uploads
+
+collections:
+  - name: site
+    label: Site Content
+    files:
+      - name: site
+        label: Portfolio Content
+        file: content/site.json
+        format: json
+        fields:
+          - label: Metadata
+            name: metadata
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - { label: Description, name: description, widget: text }
+              - { label: Site URL, name: siteUrl, widget: string }
+              - { label: Language, name: language, widget: string }
+          - label: Identity
+            name: identity
+            widget: object
+            fields:
+              - { label: Name, name: name, widget: string }
+              - { label: Location, name: location, widget: string }
+              - { label: About Statement (heading), name: statement, widget: text }
+          - label: About
+            name: about
+            widget: object
+            fields:
+              - label: Paragraphs
+                name: paragraphs
+                widget: list
+                field: { label: Paragraph, name: paragraph, widget: text }
+          - label: Navigation
+            name: navigation
+            widget: list
+            fields:
+              - { label: Label, name: label, widget: string }
+              - { label: Link, name: href, widget: string }
+          - label: Hero
+            name: hero
+            widget: object
+            fields:
+              - label: Heading Lines
+                name: headingLines
+                widget: list
+                field: { label: Line, name: line, widget: string }
+              - { label: Primary Action Label, name: primaryAction, widget: string }
+              - { label: Secondary Action Label, name: secondaryAction, widget: string }
+          - label: Impact Metrics
+            name: impact
+            widget: object
+            fields:
+              - label: Metrics
+                name: items
+                widget: list
+                summary: '{{fields.value}} {{fields.label}}'
+                fields:
+                  - { label: Value, name: value, widget: string }
+                  - { label: Label, name: label, widget: string }
+                  - { label: Context, name: context, widget: text }
+          - label: Experience
+            name: journey
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - label: Roles
+                name: items
+                widget: list
+                summary: '{{fields.role}} at {{fields.organization}}'
+                fields:
+                  - { label: Role, name: role, widget: string }
+                  - { label: Focus (optional second line), name: focus, widget: string, required: false }
+                  - { label: Period, name: period, widget: string }
+                  - { label: Organization, name: organization, widget: string }
+                  - { label: Impact Summary (used if no bullets), name: description, widget: text, required: false }
+                  - label: Impact Bullets (optional, overrides summary)
+                    name: points
+                    widget: list
+                    required: false
+                    field: { label: Point, name: point, widget: string }
+          - label: Projects
+            name: projects
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - label: Projects
+                name: items
+                widget: list
+                summary: '{{fields.name}}'
+                fields:
+                  - { label: Name, name: name, widget: string }
+                  - { label: Description, name: description, widget: text }
+                  - { label: URL, name: url, widget: string }
+          - label: Education
+            name: education
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - label: Education Items
+                name: items
+                widget: list
+                summary: '{{fields.degree}} at {{fields.institution}}'
+                fields:
+                  - { label: Degree, name: degree, widget: string }
+                  - { label: Period, name: period, widget: string }
+                  - { label: Institution, name: institution, widget: string }
+          - label: Capabilities
+            name: skills
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - label: Capability Groups
+                name: groups
+                widget: list
+                summary: '{{fields.name}}'
+                fields:
+                  - { label: Group Name, name: name, widget: string }
+                  - label: Capabilities
+                    name: items
+                    widget: list
+                    field: { label: Capability, name: skill, widget: string }
+          - label: Contact
+            name: contact
+            widget: object
+            fields:
+              - { label: Title, name: title, widget: string }
+              - { label: Email, name: email, widget: string }
+              - { label: Phone, name: phone, widget: string }
+              - { label: LinkedIn, name: linkedin, widget: string }
+              - { label: Calendar, name: calendar, widget: string }
+              - { label: CV URL, name: resume, widget: string }
+              - { label: Location, name: location, widget: string }

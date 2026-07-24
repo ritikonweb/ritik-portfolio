@@ -1,0 +1,11 @@
+{
+  "name": "Ritik Yadav",
+  "short_name": "Ritik Yadav",
+  "description": "Ritik Yadav, program management, strategy, and business operations leader in Bangalore.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e7f4fb",
+  "theme_color": "#e7f4fb",
+  "lang": "en"
+}

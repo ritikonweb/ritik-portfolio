@@ -1,0 +1,68 @@
+# Ritik Yadav | Full Portfolio Context
+
+Canonical site: https://ritik.co.in
+Positioning: Program Management, Strategy and Business Operations
+Location: Bangalore, Karnataka
+Summary: Ritik turns leadership priorities into operating systems that improve speed, visibility, and growth. His work combines cross-functional execution, analytics, revenue operations, and practical AI.
+
+## About
+I believe most problems inside a company are not talent problems. They are clarity problems. My job is to bring that clarity, shape it into a simple plan, and stay on the ground until the plan actually ships.
+For the last few years I have worked between leadership and delivery. I take the goals a CEO cares about, translate them into systems, dashboards, and daily actions, and then push until the numbers move. I have done this across real estate, technology, and high volume operations.
+I move fast, I use AI where it saves real money and time, and I measure everything. Give me a hard goal and I will build the path to reach it and own the result.
+
+## Verified impact
+
+- INR 11 lakh+ in recurring cost saved through in-house AI and website delivery at Flow Realty
+- More than INR 2 crore in monthly bookings handled by a Flow Realty booking platform
+- Calls increased from 70 to 150+ per agent each day through Ozonetel placement across 12 agents and 9 projects at Flow Realty
+- Gallabox and Double Tick migration improved message delivery from 30% to 70% in two days at Flow Realty
+- More than 100 channel partners included in NPS research at Rustomjee
+- More than 10 board presentations prepared for CEO and MD priorities at Rustomjee
+- Work informed INR 1,100 crore in quarterly sales at Rustomjee
+- An AI voice bot handled more than 200 daily calls at Rustomjee
+- More than 5 KPI dashboards built across four teams at Rustomjee
+- Risk assessments completed across more than 20 micromarkets at Rustomjee
+
+## Experience
+
+### Flow Realty | Manager, Strategy (Sales & Marketing) | Apr 2026 to Present
+Leads sales and marketing strategy across CRM, calling, bookings, AI, and web operations. Built a platform handling more than INR 2 crore in monthly bookings, saved INR 11 lakh+ in recurring costs, raised message delivery from 30% to 70% in two days, increased calls from 70 to 150+ daily through Ozonetel across 12 agents and 9 projects, led the Zoho migration, built a zero-recurring-cost DeepFilterNet3 application, and trained teams on Claude Skills, Cowork, and MCP.
+
+### Rustomjee, Keystone Realtors | Executive Trainee, Strategy | Apr 2025 to Apr 2026
+Supported CEO and MD priorities through more than 100 channel-partner NPS interviews, 10+ board presentations, 5+ KPI dashboards across four teams, operating-model documentation, risk assessments across 20+ micromarkets, and an AI voice bot handling 200+ daily calls. The work informed INR 1,100 crore in quarterly sales.
+
+### SysMind LLC | Product Marketing Intern | May 2024 to Jul 2024
+Produced product-market-fit and go-to-market analysis for MelpApp.
+
+### FMS, University of Delhi | Research Intern | May 2024 to Jun 2024
+Supported the research supervisor by constructing an SEM model for a research paper.
+
+### Flipkart | Supply Chain Management Intern | Aug 2021 to Oct 2021
+Supported Big Billion Days inventory, packaging, and sorting operations at approximately 50,000 orders per hour across three shifts.
+
+## Projects
+
+- InterVuex: AI co-pilot that structures in-person interview data and generates consistent reports. URL: https://www.linkedin.com/posts/yadavritik_hiring-hrtech-inpersoninterviews-activity-7417629708479250432-_rAy
+- Before You Send: Chrome extension that checks email quality before a message is sent. URL: https://chromewebstore.google.com/detail/khgjacjeiohgfjldnebdnhbiccidjdlf
+- Aura Meetings: Meeting intelligence tool that turns raw audio into decisions, actions, and ownership. URL: https://aurameetings.vercel.app/
+- BrowseMind: Private browser memory that retrieves previously viewed pages using natural-language search. URL: https://chromewebstore.google.com/detail/browsemind/ieagohlhcladofcddmcmalahipdfamfj?hl=en
+
+## Education
+
+- Master of Business Laws (Hybrid), National Law School of India University, 2025 to 2027
+- M.Sc. Data Science and Management, IIT Ropar and IIM Amritsar, 2023 to 2025
+- B.A. Programme in Economics and Commerce, Sri Aurobindo College, University of Delhi, 2020 to 2023
+
+## Capabilities
+
+Strategy and Operations: Program management, executive communication, operating models, market research
+Analytics and Automation: Excel, Power BI, Tableau, Looker Studio, Alteryx, Power Automate, n8n
+AI and Enterprise Systems: Claude Skills, MCP, Salesforce, Zoho Suite, SAP
+
+## Contact
+
+Email: ritik.yadav666888@gmail.com
+Phone: 9728666888
+LinkedIn: https://www.linkedin.com/in/yadavritik/
+Calendar: https://cal.com/ritikyadav/30min
+CV: https://pub-985de92c69554bf6ba125321ac04ff45.r2.dev/CV_Ritik.pdf
