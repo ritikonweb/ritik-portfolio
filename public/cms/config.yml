@@ -139,3 +139,16 @@ collections:
               - { label: Calendar, name: calendar, widget: string }
               - { label: CV URL, name: resume, widget: string }
               - { label: Location, name: location, widget: string }
+          - label: LinkedIn Updates
+            name: linkedin
+            widget: list
+            summary: '{{fields.text}}'
+            fields:
+              - { label: Text, name: text, widget: text }
+              - { label: Date, name: date, widget: string }
+              - { label: URL, name: url, widget: string }
+              - label: Tags
+                name: tags
+                widget: list
+                required: false
+                field: { label: Tag, name: tag, widget: string }

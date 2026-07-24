@@ -10,4 +10,4 @@ out
 .kiro-visual/
 tsconfig.tsbuildinfo
 *.png.png
-scripts/
+scripts/*.ps1

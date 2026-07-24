@@ -1,0 +1,42 @@
+name: Sync LinkedIn updates
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linkedin-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Sync posts into content/site.json
+        env:
+          LINKEDIN_FEED_URL: ${{ vars.LINKEDIN_FEED_URL }}
+        run: node scripts/sync-linkedin.mjs
+
+      - name: Commit on change
+        run: |
+          if [ -n "$(git status --porcelain content/site.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add content/site.json
+            git commit -m "chore: sync latest LinkedIn updates"
+            git push
+          else
+            echo "No changes to commit."
+          fi
