@@ -5,3 +5,9 @@ out
 !.env.example
 *.log
 .DS_Store
+
+# Local tooling and scratch artifacts (do not publish)
+.kiro-visual/
+tsconfig.tsbuildinfo
+*.png.png
+scripts/
