@@ -2,6 +2,8 @@ backend:
   name: github
   repo: ritikonweb/ritik-portfolio
   branch: main
+  base_url: https://ritik.co.in
+  auth_endpoint: api/auth
 
 local_backend: true
 media_folder: public/uploads
