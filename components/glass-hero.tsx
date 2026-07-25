@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import site from "@/content/site.json";
+import VoiceWidget from "@/components/voice-widget";
 
 const DESKTOP_RADIUS = 235;
 const MOBILE_RADIUS = 250;
@@ -72,7 +73,7 @@ export default function GlassHero() {
       <div className="hero-stage">
         <div className="hero-copy">
           <h1 id="hero-title" className="hero-heading" aria-label={site.hero.headingLines.join(" ")}>{site.hero.headingLines.map((line, index) => <span aria-hidden="true" key={`${line}-${index}`}>{line}</span>)}</h1>
-          <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer">{site.hero.primaryAction}</a><a className="text-link" href="#experience">{site.hero.secondaryAction}</a></div>
+          <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer">{site.hero.primaryAction}</a><a className="text-link" href="#experience">{site.hero.secondaryAction}</a><VoiceWidget /></div>
         </div>
         <div ref={heroRef} className="hero-media" onContextMenu={(e) => e.preventDefault()} onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
           <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.png" width="1672" height="941" alt="Portrait of Ritik Yadav" draggable={false} />
