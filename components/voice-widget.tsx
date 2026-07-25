@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
+// Cost guards: stop streaming audio when nobody is actually talking.
+const IDLE_STOP_MS = 15000;
+const MAX_SESSION_MS = 240000;
+
 const LABELS: Record<Phase, string> = {
   idle: "Let's Talk",
   connecting: "Connecting",
@@ -53,9 +57,16 @@ export default function VoiceWidget() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeRef = useRef(false);
+  const lastActivityRef = useRef(0);
+  const startedAtRef = useRef(0);
+  const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const teardown = useCallback((note?: string | null) => {
     activeRef.current = false;
+    if (watchdogRef.current !== null) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
+    }
     channelRef.current?.close();
     channelRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -91,6 +102,8 @@ export default function VoiceWidget() {
       return;
     }
     const type = event.type ?? "";
+    // Any real speech or model output counts as activity and resets the idle timer.
+    if (type.startsWith("input_audio_buffer.") || type.startsWith("response.")) lastActivityRef.current = Date.now();
     if (type === "input_audio_buffer.speech_started") setPhase("listening");
     else if (type === "input_audio_buffer.speech_stopped" || type === "response.created") setPhase("thinking");
     else if (type === "response.output_audio.delta" || type === "output_audio_buffer.started") setPhase("speaking");
@@ -177,6 +190,17 @@ export default function VoiceWidget() {
       channel.onmessage = (event) => handleEvent(String(event.data));
       channel.onopen = () => {
         setPhase("listening");
+        lastActivityRef.current = Date.now();
+        startedAtRef.current = Date.now();
+        watchdogRef.current = setInterval(() => {
+          if (!activeRef.current) return;
+          const now = Date.now();
+          if (now - lastActivityRef.current >= IDLE_STOP_MS) {
+            teardown("Paused after a quiet moment. Tap to talk again.");
+          } else if (now - startedAtRef.current >= MAX_SESSION_MS) {
+            teardown("Session ended. Tap to start a new one.");
+          }
+        }, 1000);
         channel.send(
           JSON.stringify({
             type: "session.update",
@@ -185,11 +209,16 @@ export default function VoiceWidget() {
               model: config.model,
               instructions: config.instructions,
               output_modalities: ["audio", "text"],
+              // Keeps replies short, which caps both token and TTS spend.
+              max_output_tokens: 220,
               audio: {
                 input: {
-                  turn_detection: { type: "semantic_vad", eagerness: "medium", create_response: true, interrupt_response: true },
+                  transcription: { model: "inworld/inworld-stt-1" },
+                  // "low" needs stronger confidence before ending or interrupting a turn,
+                  // so the bot is not cut off by its own audio or background noise.
+                  turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
                 },
-                output: { model: "inworld-tts-2", voice: config.voice },
+                output: { model: "inworld-tts-2", voice: config.voice, speed: 1.12 },
               },
             },
           }),
