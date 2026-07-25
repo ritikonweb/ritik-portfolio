@@ -60,6 +60,7 @@ export default function VoiceWidget() {
   const lastActivityRef = useRef(0);
   const startedAtRef = useRef(0);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failoverRef = useRef<((reason: string) => void) | null>(null);
 
   const teardown = useCallback((note?: string | null) => {
     activeRef.current = false;
@@ -110,11 +111,13 @@ export default function VoiceWidget() {
     else if (type === "response.done" || type === "output_audio_buffer.stopped") {
       if (activeRef.current) setPhase("listening");
     } else if (type === "error") {
-      teardown("Voice session ended. Try again.");
+      // Often means the account ran out of credit, so try the next one.
+      if (failoverRef.current) failoverRef.current("Voice session ended. Try again.");
+      else teardown("Voice session ended. Try again.");
     }
   }, [teardown]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (accountIndex = 0) => {
     setMessage(null);
 
     if (typeof window === "undefined" || !window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
@@ -148,12 +151,15 @@ export default function VoiceWidget() {
       callsUrl: string;
       iceServers: RTCIceServer[];
       model: string;
+      ttsModel: string;
       voice: string;
       instructions: string;
+      accountIndex: number;
+      accountCount: number;
     };
 
     try {
-      const response = await fetch("/api/voice/session/", { cache: "no-store" });
+      const response = await fetch(`/api/voice/session/?account=${accountIndex}`, { cache: "no-store" });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
         teardown(body.error || "Voice isn't available right now.");
@@ -164,6 +170,18 @@ export default function VoiceWidget() {
       teardown("Network problem. Check your connection and try again.");
       return;
     }
+
+    // If this account fails, silently move to the next configured one.
+    const hasSpare = config.accountIndex + 1 < config.accountCount;
+    failoverRef.current = (reason: string) => {
+      failoverRef.current = null;
+      if (!hasSpare) {
+        teardown(reason);
+        return;
+      }
+      teardown(null);
+      void start(config.accountIndex + 1);
+    };
 
     try {
       const peer = new RTCPeerConnection({ iceServers: config.iceServers ?? [] });
@@ -218,7 +236,7 @@ export default function VoiceWidget() {
                   // so the bot is not cut off by its own audio or background noise.
                   turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
                 },
-                output: { model: "inworld-tts-2", voice: config.voice, speed: 1.12 },
+                output: { model: config.ttsModel, voice: config.voice, speed: 1.12 },
               },
             },
           }),
@@ -251,7 +269,7 @@ export default function VoiceWidget() {
         body: peer.localDescription?.sdp ?? "",
       });
       if (!answer.ok) {
-        teardown("Voice service didn't accept the call. Try again.");
+        failoverRef.current?.("Voice service didn't accept the call. Try again.");
         return;
       }
       await peer.setRemoteDescription({ type: "answer", sdp: await answer.text() });
@@ -261,8 +279,11 @@ export default function VoiceWidget() {
   }, [handleEvent, teardown]);
 
   const toggle = useCallback(() => {
-    if (phase === "idle") void start();
-    else teardown(null);
+    if (phase === "idle") void start(0);
+    else {
+      failoverRef.current = null;
+      teardown(null);
+    }
   }, [phase, start, teardown]);
 
   const busy = phase !== "idle";

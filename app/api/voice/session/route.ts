@@ -10,18 +10,33 @@ const INWORLD_HOST = "api.inworld.ai";
 const ENGINE_HOST = "api-engine.inworld.ai";
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 const DEFAULT_VOICE = "Ashley";
+// inworld-tts-1.5-mini is $15/1M chars vs $25 for tts-2, and lower latency.
+const DEFAULT_TTS_MODEL = "inworld-tts-1.5-mini";
 
 type ApiKey = { key: string; secret: string };
+type Account = { credential: string; voice: string };
+
+/** Reads the primary account plus any numbered fallbacks (…_2, _3, …). */
+function loadAccounts(): Account[] {
+  const accounts: Account[] = [];
+  const push = (credential?: string, voice?: string) => {
+    const trimmed = (credential || "").trim();
+    if (trimmed) accounts.push({ credential: trimmed, voice: (voice || "").trim() || DEFAULT_VOICE });
+  };
+  push(process.env.INWORLD_API_KEY, process.env.INWORLD_VOICE_ID);
+  for (let i = 2; i <= 5; i += 1) {
+    push(process.env[`INWORLD_API_KEY_${i}`], process.env[`INWORLD_VOICE_ID_${i}`]);
+  }
+  return accounts;
+}
 
 /** Splits the Base64 "key:secret" credential from the Inworld portal. */
-function resolveApiKey(): ApiKey {
-  const basic = (process.env.INWORLD_API_KEY || "").trim();
-  if (!basic) throw new Error("INWORLD_API_KEY is not set");
+function parseCredential(basic: string): ApiKey {
   const decoded = Buffer.from(basic, "base64").toString("utf8");
   const index = decoded.indexOf(":");
   const key = index > 0 ? decoded.slice(0, index) : "";
   const secret = index > 0 ? decoded.slice(index + 1) : "";
-  if (!key || !secret) throw new Error('INWORLD_API_KEY must be base64 of "key:secret"');
+  if (!key || !secret) throw new Error('Credential must be base64 of "key:secret"');
   return { key, secret };
 }
 
@@ -51,10 +66,8 @@ async function mintJwt(apiKey: ApiKey) {
     body: JSON.stringify({ key: apiKey.key, resources: [] }),
     cache: "no-store",
   });
-  if (!response.ok) {
-    throw new Error(`Token request failed (${response.status})`);
-  }
-  return (await response.json()) as { token: string; type?: string; expirationTime?: string };
+  if (!response.ok) throw new Error(`Token request failed (${response.status})`);
+  return (await response.json()) as { token: string; expirationTime?: string };
 }
 
 async function fetchIceServers(jwt: string) {
@@ -73,38 +86,77 @@ async function fetchIceServers(jwt: string) {
 
 async function readPersona(): Promise<string> {
   try {
-    const file = path.join(process.cwd(), "bot", "persona.md");
-    const raw = await readFile(file, "utf8");
-    // Strip HTML comments so editor notes never reach the model.
+    const raw = await readFile(path.join(process.cwd(), "bot", "persona.md"), "utf8");
     return raw.replace(/<!--[\s\S]*?-->/g, "").trim();
   } catch {
-    return "You are Ritik Yadav. Speak briefly and naturally, one to three sentences, no lists or markdown.";
+    return "You are Ritik Yadav. Speak briefly and naturally, one or two sentences, no lists or markdown.";
   }
 }
 
-export async function GET() {
-  try {
-    const apiKey = resolveApiKey();
-    const [jwt, persona] = await Promise.all([mintJwt(apiKey), readPersona()]);
-    const iceServers = await fetchIceServers(jwt.token);
-    return NextResponse.json(
-      {
-        token: jwt.token,
-        expiresAt: jwt.expirationTime ?? null,
-        callsUrl: `https://${INWORLD_HOST}/v1/realtime/calls`,
-        iceServers,
-        model: (process.env.INWORLD_LLM_MODEL || DEFAULT_MODEL).trim(),
-        voice: (process.env.INWORLD_VOICE_ID || DEFAULT_VOICE).trim(),
-        instructions: persona,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Voice session unavailable";
-    const configIssue = message.includes("INWORLD_API_KEY");
-    return NextResponse.json(
-      { error: configIssue ? "Voice is not configured yet." : "Could not start a voice session." },
-      { status: configIssue ? 503 : 502, headers: { "Cache-Control": "no-store" } },
-    );
+// Small in-memory throttle so a single visitor cannot spin up endless paid sessions.
+// Serverless instances are short lived, so treat this as a speed bump, not a hard gate.
+const RATE_LIMIT = 12;
+const RATE_WINDOW_MS = 5 * 60 * 1000;
+const hits = new Map<string, number[]>();
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const recent = (hits.get(ip) || []).filter((time) => now - time < RATE_WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+  if (hits.size > 500) {
+    hits.forEach((times: number[], key: string) => {
+      if (times.every((time) => now - time >= RATE_WINDOW_MS)) hits.delete(key);
+    });
   }
+  return recent.length > RATE_LIMIT;
+}
+
+export async function GET(request: Request) {
+  const accounts = loadAccounts();
+  if (accounts.length === 0) {
+    return NextResponse.json({ error: "Voice is not configured yet." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if (rateLimited(ip)) {
+    return NextResponse.json({ error: "Too many voice sessions. Try again in a few minutes." }, { status: 429, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const requested = Number(new URL(request.url).searchParams.get("account") || 0);
+  const startAt = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 0;
+  if (startAt >= accounts.length) {
+    return NextResponse.json({ error: "Voice is unavailable right now." }, { status: 502, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const persona = await readPersona();
+
+  // Walk the accounts in order until one mints a token, so an exhausted or
+  // broken key automatically falls through to the next.
+  for (let index = startAt; index < accounts.length; index += 1) {
+    const account = accounts[index];
+    try {
+      const jwt = await mintJwt(parseCredential(account.credential));
+      const iceServers = await fetchIceServers(jwt.token);
+      return NextResponse.json(
+        {
+          token: jwt.token,
+          expiresAt: jwt.expirationTime ?? null,
+          callsUrl: `https://${INWORLD_HOST}/v1/realtime/calls`,
+          iceServers,
+          model: (process.env.INWORLD_LLM_MODEL || DEFAULT_MODEL).trim(),
+          ttsModel: (process.env.INWORLD_TTS_MODEL || DEFAULT_TTS_MODEL).trim(),
+          voice: account.voice,
+          instructions: persona,
+          accountIndex: index,
+          accountCount: accounts.length,
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    } catch {
+      // Try the next account.
+    }
+  }
+
+  return NextResponse.json({ error: "Could not start a voice session." }, { status: 502, headers: { "Cache-Control": "no-store" } });
 }
