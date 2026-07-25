@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import site from "@/content/site.json";
 
 type Post = { text: string; date: string; url: string; tags?: string[] };
@@ -21,14 +22,28 @@ function Card({ post, ariaHidden }: { post: Post; ariaHidden?: boolean }) {
 }
 
 export default function LinkedInFeed() {
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  // Only animate while the strip is on screen, so it never burns CPU or battery in the background.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || !("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => strip.classList.toggle("is-running", entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, []);
+
   const posts = (site.linkedin ?? []) as Post[];
   if (posts.length === 0) return null;
   const ordered = [...posts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return (
-    <div className="li-strip section-shell" aria-label="Latest updates from LinkedIn">
+    <div ref={stripRef} className="li-strip section-shell" aria-label="Latest updates from LinkedIn">
       <div className="li-track">
-        {ordered.map((post) => <Card key={post.url} post={post} />)}
-        {ordered.map((post) => <Card key={`dup-${post.url}`} post={post} ariaHidden />)}
+        {ordered.map((post, index) => <Card key={`post-${index}-${post.date}`} post={post} />)}
+        {ordered.map((post, index) => <Card key={`dup-${index}-${post.date}`} post={post} ariaHidden />)}
       </div>
     </div>
   );
