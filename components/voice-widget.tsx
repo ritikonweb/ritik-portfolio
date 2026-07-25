@@ -152,6 +152,7 @@ export default function VoiceWidget() {
       iceServers: RTCIceServer[];
       model: string;
       ttsModel: string;
+      ttsSpeed: number;
       voice: string;
       instructions: string;
       accountIndex: number;
@@ -235,7 +236,7 @@ export default function VoiceWidget() {
                   transcription: { model: "inworld/inworld-stt-1" },
                   turn_detection: { type: "semantic_vad", eagerness: "medium", create_response: true, interrupt_response: true },
                 },
-                output: { model: config.ttsModel, voice: config.voice, speed: 1.18 },
+                output: { model: config.ttsModel, voice: config.voice, speed: config.ttsSpeed },
               },
               providerData: {
                 stt: {

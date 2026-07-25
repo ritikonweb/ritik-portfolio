@@ -13,6 +13,8 @@ const DEFAULT_VOICE = "Ashley";
 // tts-2 costs more ($25 vs $15 per 1M chars) but is the only model with the
 // expressive delivery presets, so it is worth it for a human sounding voice.
 const DEFAULT_TTS_MODEL = "inworld-tts-2";
+// Speaking rate. 1.0 is the model default, which sounds slow in conversation.
+const DEFAULT_TTS_SPEED = 1.35;
 
 type ApiKey = { key: string; secret: string };
 type Account = { credential: string; voice: string };
@@ -147,6 +149,11 @@ export async function GET(request: Request) {
           iceServers,
           model: (process.env.INWORLD_LLM_MODEL || DEFAULT_MODEL).trim(),
           ttsModel: (process.env.INWORLD_TTS_MODEL || DEFAULT_TTS_MODEL).trim(),
+          ttsSpeed: (() => {
+            const parsed = Number(process.env.INWORLD_TTS_SPEED);
+            // Clamp so a bad value cannot make the voice unusable.
+            return Number.isFinite(parsed) && parsed >= 0.5 && parsed <= 2 ? parsed : DEFAULT_TTS_SPEED;
+          })(),
           voice: account.voice,
           instructions: persona,
           accountIndex: index,
