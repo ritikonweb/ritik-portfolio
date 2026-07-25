@@ -11,3 +11,4 @@ out
 tsconfig.tsbuildinfo
 *.png.png
 scripts/*.ps1
+linked profile.pdf
