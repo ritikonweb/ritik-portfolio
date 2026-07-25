@@ -27,7 +27,7 @@ knows and how it speaks. It is read server-side on each voice session request.
 | `INWORLD_API_KEY_2` … `_5` | optional | Fallback accounts, used automatically if the one before runs out |
 | `INWORLD_VOICE_ID_2` … `_5` | optional | Voice for each matching fallback account |
 | `INWORLD_LLM_MODEL` | optional | Defaults to `openai/gpt-4o-mini` (fast, non-reasoning) |
-| `INWORLD_TTS_MODEL` | optional | Defaults to `inworld-tts-1.5-mini` ($15/1M chars). Use `inworld-tts-2` for higher quality at $25 |
+| `INWORLD_TTS_MODEL` | optional | Defaults to `inworld-tts-2` (expressive, $25/1M chars). Use `inworld-tts-1.5-mini` to halve cost at lower quality |
 | `LINKEDIN_FEED_URL` | optional | Repo *variable* for the hourly LinkedIn sync workflow |
 
 Never commit secrets. This repo is public; keys stay in Vercel only.

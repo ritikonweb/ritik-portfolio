@@ -10,8 +10,9 @@ const INWORLD_HOST = "api.inworld.ai";
 const ENGINE_HOST = "api-engine.inworld.ai";
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 const DEFAULT_VOICE = "Ashley";
-// inworld-tts-1.5-mini is $15/1M chars vs $25 for tts-2, and lower latency.
-const DEFAULT_TTS_MODEL = "inworld-tts-1.5-mini";
+// tts-2 costs more ($25 vs $15 per 1M chars) but is the only model with the
+// expressive delivery presets, so it is worth it for a human sounding voice.
+const DEFAULT_TTS_MODEL = "inworld-tts-2";
 
 type ApiKey = { key: string; secret: string };
 type Account = { credential: string; voice: string };

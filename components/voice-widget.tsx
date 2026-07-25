@@ -227,16 +227,35 @@ export default function VoiceWidget() {
               model: config.model,
               instructions: config.instructions,
               output_modalities: ["audio", "text"],
-              // Keeps replies short, which caps both token and TTS spend.
               max_output_tokens: 220,
+              // Warmer, less deterministic phrasing so answers do not sound recited.
+              temperature: 0.9,
               audio: {
                 input: {
                   transcription: { model: "inworld/inworld-stt-1" },
-                  // "low" needs stronger confidence before ending or interrupting a turn,
-                  // so the bot is not cut off by its own audio or background noise.
-                  turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
+                  turn_detection: { type: "semantic_vad", eagerness: "medium", create_response: true, interrupt_response: true },
                 },
-                output: { model: config.ttsModel, voice: config.voice, speed: 1.12 },
+                output: { model: config.ttsModel, voice: config.voice, speed: 1.18 },
+              },
+              providerData: {
+                stt: {
+                  // Names the model would otherwise mishear, plus tuning that ends turns
+                  // quickly without letting the bot's own audio interrupt it.
+                  prompt: "Conversation with Ritik Yadav. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore.",
+                  end_of_turn_confidence_threshold: 0.8,
+                  vad_threshold: 0.6,
+                  min_end_of_turn_silence: 260,
+                  max_turn_silence: 2600,
+                },
+                tts: {
+                  // CREATIVE is the expressive preset; fast_start gets the first words
+                  // out quickly so replies do not feel sluggish.
+                  delivery_mode: "CREATIVE",
+                  segmenter_strategy: "fast_start",
+                  steering_handling: "emit_once",
+                },
+                // Speaks a short filler if the model is slow, instead of dead air.
+                responsiveness: { enabled: true, max_initial_per_turn: 1 },
               },
             },
           }),
