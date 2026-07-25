@@ -56,7 +56,6 @@ collections:
                 widget: list
                 field: { label: Line, name: line, widget: string }
               - { label: Primary Action Label, name: primaryAction, widget: string }
-              - { label: Secondary Action Label, name: secondaryAction, widget: string }
           - label: Impact Metrics
             name: impact
             widget: object

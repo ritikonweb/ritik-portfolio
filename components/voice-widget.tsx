@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
 const LABELS: Record<Phase, string> = {
-  idle: "Talk to me",
+  idle: "Let's Talk",
   connecting: "Connecting",
   listening: "Listening",
   thinking: "Thinking",
@@ -112,6 +112,24 @@ export default function VoiceWidget() {
     setPhase("connecting");
     activeRef.current = true;
 
+    // Ask for the mic first, while we are still inside the click gesture.
+    // Safari refuses the permission prompt if an await (like fetch) happens first.
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (error) {
+      const name = (error as DOMException)?.name;
+      if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
+        teardown("No microphone found. Connect one and try again.");
+      } else if (name === "NotReadableError" || name === "TrackStartError") {
+        teardown("Your microphone is in use by another app.");
+      } else if (name === "SecurityError" || !window.isSecureContext) {
+        teardown("Voice needs a secure https connection.");
+      } else {
+        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
+      }
+      return;
+    }
+
     let config: {
       token: string;
       callsUrl: string;
@@ -131,16 +149,6 @@ export default function VoiceWidget() {
       config = await response.json();
     } catch {
       teardown("Network problem. Check your connection and try again.");
-      return;
-    }
-
-    try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-    } catch (error) {
-      const name = (error as DOMException)?.name;
-      if (name === "NotAllowedError" || name === "SecurityError") teardown("Microphone blocked. Allow mic access, then try again.");
-      else if (name === "NotFoundError" || name === "DevicesNotFoundError") teardown("No microphone found.");
-      else teardown("Couldn't use the microphone.");
       return;
     }
 
@@ -232,7 +240,7 @@ export default function VoiceWidget() {
 
   return (
     <span className="voice-widget">
-      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Talk to me, start a voice conversation"}>
+      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Let's talk, start a voice conversation"}>
         <span className="voice-glyph" aria-hidden="true">
           {phase === "listening" || phase === "speaking" ? <Bars /> : phase === "thinking" ? <StopIcon /> : <MicIcon />}
         </span>

@@ -65,15 +65,14 @@ export default function GlassHero() {
         <nav aria-label="Primary navigation" className="hero-nav">
           <a className="brand" href="#main-content" aria-label={`${site.identity.name}, back to top`}>{site.identity.name}</a>
           <button className="menu-toggle" type="button" aria-expanded={menuOpen} aria-controls="primary-links" aria-label={menuOpen ? "Close navigation" : "Open navigation"} onClick={() => setMenuOpen((open) => !open)}><span /><span /></button>
-          <div id="primary-links" className={`nav-links${menuOpen ? " is-open" : ""}`}>{site.navigation.map((item) => <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</a>)}<a className="mobile-talk" href={site.contact.calendar} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Let&apos;s Talk</a></div>
-          <a className="pill-button nav-cta" href={site.contact.calendar} target="_blank" rel="noreferrer">Let&apos;s Talk</a>
+          <div id="primary-links" className={`nav-links${menuOpen ? " is-open" : ""}`}>{site.navigation.map((item) => <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</a>)}</div>
         </nav>
       </header>
 
       <div className="hero-stage">
         <div className="hero-copy">
           <h1 id="hero-title" className="hero-heading" aria-label={site.hero.headingLines.join(" ")}>{site.hero.headingLines.map((line, index) => <span aria-hidden="true" key={`${line}-${index}`}>{line}</span>)}</h1>
-          <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer">{site.hero.primaryAction}</a><a className="text-link" href="#experience">{site.hero.secondaryAction}</a><VoiceWidget /></div>
+          <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer">{site.hero.primaryAction}</a><VoiceWidget /></div>
         </div>
         <div ref={heroRef} className="hero-media" onContextMenu={(e) => e.preventDefault()} onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
           <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.webp" width="1672" height="941" alt="Portrait of Ritik Yadav" fetchPriority="high" decoding="async" draggable={false} />
