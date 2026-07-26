@@ -49,14 +49,26 @@ const personSchema = {
   address: { "@type": "PostalAddress", addressLocality: "Bangalore", addressRegion: "Karnataka", addressCountry: "IN" },
   worksFor: { "@type": "Organization", name: site.journey.items[0].organization },
   alumniOf: site.education.items.map((item) => ({ "@type": "CollegeOrUniversity", name: item.institution })),
-  sameAs: [site.contact.linkedin],
+  // Every profile listed here helps Google tie the same person together.
+  sameAs: [site.contact.linkedin, ...(("profiles" in site.identity ? (site.identity as { profiles?: string[] }).profiles : []) ?? [])].filter(Boolean),
+  knowsLanguage: ["en", "hi"],
+  nationality: { "@type": "Country", name: "India" },
   knowsAbout: site.skills.groups.flatMap((group) => group.items),
 };
 
 const structuredData = {
   "@context": "https://schema.org",
   "@graph": [
-    { "@type": "WebSite", "@id": `${site.metadata.siteUrl}/#website`, url: site.metadata.siteUrl, name: site.identity.name, inLanguage: "en", publisher: { "@id": `${site.metadata.siteUrl}/#person` } },
+    {
+      "@type": "WebSite",
+      "@id": `${site.metadata.siteUrl}/#website`,
+      url: site.metadata.siteUrl,
+      // Google uses these for the site name shown above the search result.
+      name: site.identity.name,
+      alternateName: [`${site.identity.name} Portfolio`, "Ritik"],
+      inLanguage: "en",
+      publisher: { "@id": `${site.metadata.siteUrl}/#person` },
+    },
     { "@type": "ProfilePage", "@id": `${site.metadata.siteUrl}/#profile`, url: site.metadata.siteUrl, name: site.metadata.title, isPartOf: { "@id": `${site.metadata.siteUrl}/#website` }, about: { "@id": `${site.metadata.siteUrl}/#person` }, mainEntity: { "@id": `${site.metadata.siteUrl}/#person` } },
     personSchema,
   ],

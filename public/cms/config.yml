@@ -32,6 +32,11 @@ collections:
             fields:
               - { label: Name, name: name, widget: string }
               - { label: Location, name: location, widget: string }
+              - label: Other Profile URLs (helps Google link them to you)
+                name: profiles
+                widget: list
+                required: false
+                field: { label: Profile URL, name: url, widget: string }
               - { label: About Statement (heading), name: statement, widget: text }
           - label: About
             name: about
