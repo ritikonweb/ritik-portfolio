@@ -13,6 +13,7 @@ tsconfig.tsbuildinfo
 scripts/*.ps1
 linked profile.pdf
 
-# Personal CV working files, kept local only
+# Personal CV and job application files, kept local only
 cv/
+applications/
 scripts/pdf-text-check.mjs
