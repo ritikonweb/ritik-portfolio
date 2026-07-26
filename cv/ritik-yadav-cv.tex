@@ -1,0 +1,119 @@
+% Ritik Yadav - ATS friendly one page CV
+% Compile with: pdflatex ritik-yadav-cv.tex
+% Single column, real text, no tables or text boxes, so ATS parsers read it cleanly.
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx}                 % Times style serif, matches the previous CV
+\usepackage[left=0.55in,right=0.55in,top=0.5in,bottom=0.5in]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+% Makes copied/parsed text map back to real characters, which matters for ATS.
+\input{glyphtounicode}
+\pdfgentounicode=1
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\linespread{1.02}
+
+% Section headings: small caps style rule across the page
+\titleformat{\section}{\normalsize\bfseries\uppercase}{}{0pt}{}[\vspace{-7pt}\rule{\textwidth}{0.6pt}]
+\titlespacing{\section}{0pt}{7pt}{3pt}
+
+\setlist[itemize]{leftmargin=12pt,topsep=2pt,itemsep=1pt,parsep=0pt,label=\textbullet}
+
+% Employer line: name on the left, location on the right
+\newcommand{\role}[2]{\textbf{#1}\hfill#2\par}
+% Title line: designation on the left, dates on the right
+\newcommand{\designation}[2]{\textit{#1}\hfill\textit{#2}\par\vspace{1pt}}
+
+\begin{document}
+
+{\LARGE\bfseries RITIK YADAV}\par
+\vspace{2pt}
+Bangalore, Karnataka $|$ ritik.yadav666888@gmail.com $|$ +91 97286 66888 $|$
+\href{https://www.linkedin.com/in/yadavritik/}{linkedin.com/in/yadavritik} $|$
+\href{https://ritik.co.in}{ritik.co.in}\par
+\vspace{3pt}
+\textbf{Business Operations $|$ Strategy \& Program Management $|$ Revenue Operations $|$ Chief of Staff}\par
+\vspace{4pt}
+
+Strategy and business operations professional who builds the systems behind revenue: booking platforms, CRM
+migrations, contact-centre workflows and AI-led automation. Delivered a platform processing INR 2 crore+ in monthly
+transaction volume, removed INR 11 lakh in annual recurring cost and doubled sales-agent throughput. Experienced in
+CEO and MD level stakeholder management, cross-functional program execution, KPI governance and change management.
+
+\section{Professional Experience}
+
+\role{Flow Realty (Power of Flow Realty LLP)}{Bangalore, Karnataka}
+\designation{Manager - Strategy (Sales and Marketing)}{Apr 2026 - Present}
+\begin{itemize}
+  \item Built and launched a booking platform with integrated payment gateways and multi-tier customer, developer and
+        partner portals, unifying fragmented access into one system now processing \textbf{INR 2 crore+ in monthly
+        transaction volume}.
+  \item Cut \textbf{INR 11 lakh in annual recurring cost} by replacing third-party marketing and reporting tools with
+        in-house AI-built systems and rebuilding the company website in-house.
+  \item Migrated messaging infrastructure to Gallabox and Double Tick, raising delivery from \textbf{30\% to 70\% in two
+        days} and resolving the company's largest operational bottleneck.
+  \item Deployed Ozonetel contact-centre infrastructure across \textbf{12 agents and 9 concurrent projects} and
+        restructured pre-sales workflows, lifting throughput from \textbf{70 to 150 calls per agent per day} and cutting
+        response TAT to \textbf{10 minutes}.
+  \item Leading an enterprise CRM change-management program, consolidating sales, marketing and operations data onto a
+        unified \textbf{Zoho Suite} platform.
+  \item Owned AI adoption and governance: trained teams on Claude (Skills, Cowork, MCP) for reporting and dashboard
+        automation, and shipped a zero-cost Windows application using DeepFilterNet3 for real-time call noise
+        suppression.
+\end{itemize}
+
+\vspace{3pt}
+\role{Rustomjee - Keystone Realtors Limited}{Mumbai, Maharashtra}
+\designation{Executive Trainee - Strategy (Sales and Marketing)}{Apr 2025 - Apr 2026}
+\begin{itemize}
+  \item Delivered Chief-of-Staff style support to the \textbf{CEO and Managing Director}, leading NPS research across
+        \textbf{100+ channel partners} and preparing \textbf{10+ board-level presentations} that informed strategy behind
+        \textbf{INR 1,100 crore in quarterly sales volume}.
+  \item Deployed a 24x7 AI voice bot handling \textbf{200+ calls daily}, cutting average response time from
+        \textbf{15 minutes to under 1 minute}.
+  \item Built \textbf{5+ weekly and monthly KPI dashboards across 4 cross-functional teams}, establishing the governance
+        cadence that gave leadership real-time visibility into performance and risk.
+  \item Ran data-driven risk assessments across \textbf{20+ micromarkets} for land acquisition strategy, and designed and
+        documented the operating model defining ownership and accountability across workstreams.
+\end{itemize}
+
+\section{Internships}
+\begin{itemize}
+  \item \textbf{SysMind LLC}, Product Marketing Intern, Noida (May 2024 - Jul 2024): analysed multiple sectors for
+        MelpApp's product-market fit and delivered data-driven go-to-market recommendations.
+  \item \textbf{Flipkart}, Supply Chain Management Intern, Gurugram (Aug 2021 - Oct 2021): managed inventory, packaging
+        and sorting during Big Billion Days, processing approximately 50,000 orders per hour across a 3-shift fulfilment
+        environment.
+\end{itemize}
+
+\section{Products Built}
+\begin{itemize}
+  \item \textbf{InterVuex:} AI co-pilot for hiring interviews with real-time data structuring and automated reporting.
+        \textbf{Aura Meetings:} extracts decisions, action items and accountability from raw meeting audio.
+  \item \textbf{BrowseMind:} AI browser-memory tool for retrieving anything read online.
+        \textbf{Before You Send:} Chrome extension automating email quality checks before dispatch.
+\end{itemize}
+
+\section{Education}
+\textbf{Master of Business Laws (Hybrid)}, National Law School of India University (NLSIU), Bangalore \hfill 2025 - 2027\par
+\textbf{M.Sc. Data Science and Management}, IIT Ropar and IIM Amritsar (Full-Time Residential) \hfill 2023 - 2025\par
+\textbf{B.A. Programme (Economics and Commerce)}, Sri Aurobindo College, University of Delhi \hfill 2020 - 2023\par
+
+\section{Skills}
+\textbf{Strategy \& Operations:} Program Management, Business Operations, Revenue Operations, Sales Operations,
+Cross-functional Execution, Stakeholder Management (CEO/MD), Change Management, Process Design, Operating Model Design,
+Vendor Management, OKRs and KPIs, Go-to-Market Strategy, Market Research, 0-to-1 Build\par
+\vspace{1pt}
+\textbf{Analytics \& Automation:} Tableau, Power BI, Looker Studio, Advanced Excel, Alteryx, KPI Dashboarding, Business
+Analysis, n8n, Microsoft Power Automate, Workflow Automation\par
+\vspace{1pt}
+\textbf{AI \& Enterprise Systems:} Claude (Skills, Cowork, MCP), AI Voice Bots, AI Governance, Salesforce CRM, Zoho
+Suite, SAP, Gallabox, Ozonetel\par
+
+\end{document}
