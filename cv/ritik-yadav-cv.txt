@@ -1,0 +1,45 @@
+RITIK YADAV
+Bangalore, Karnataka | ritik.yadav666888@gmail.com | +91 97286 66888 | linkedin.com/in/yadavritik | ritik.co.in
+
+Business Operations | Strategy & Program Management | Revenue Operations | Chief of Staff
+
+SUMMARY
+Strategy and business operations professional who builds the systems behind revenue: booking platforms, CRM migrations, contact-centre workflows and AI-led automation. Delivered a platform processing INR 2 crore+ in monthly transaction volume, removed INR 11 lakh in annual recurring cost and doubled sales-agent throughput. Experienced in CEO and MD level stakeholder management, cross-functional program execution, KPI governance and change management.
+
+PROFESSIONAL EXPERIENCE
+
+Flow Realty (Power of Flow Realty LLP) - Bangalore, Karnataka
+Manager - Strategy (Sales and Marketing) | Apr 2026 - Present
+- Built and launched a booking platform with integrated payment gateways and multi-tier customer, developer and partner portals, unifying fragmented access into one system now processing INR 2 crore+ in monthly transaction volume.
+- Cut INR 11 lakh in annual recurring cost by replacing third-party marketing and reporting tools with in-house AI-built systems and rebuilding the company website in-house.
+- Migrated messaging infrastructure to Gallabox and Double Tick, raising delivery from 30% to 70% in two days and resolving the company's largest operational bottleneck.
+- Deployed Ozonetel contact-centre infrastructure across 12 agents and 9 concurrent projects and restructured pre-sales workflows, lifting throughput from 70 to 150 calls per agent per day and cutting response TAT to 10 minutes.
+- Leading an enterprise CRM change-management program, consolidating sales, marketing and operations data onto a unified Zoho Suite platform.
+- Owned AI adoption and governance: trained teams on Claude (Skills, Cowork, MCP) for reporting and dashboard automation, and shipped a zero-cost Windows application using DeepFilterNet3 for real-time call noise suppression.
+
+Rustomjee - Keystone Realtors Limited - Mumbai, Maharashtra
+Executive Trainee - Strategy (Sales and Marketing) | Apr 2025 - Apr 2026
+- Delivered Chief-of-Staff style support to the CEO and Managing Director, leading NPS research across 100+ channel partners and preparing 10+ board-level presentations that informed strategy behind INR 1,100 crore in quarterly sales volume.
+- Deployed a 24x7 AI voice bot handling 200+ calls daily, cutting average response time from 15 minutes to under 1 minute.
+- Built 5+ weekly and monthly KPI dashboards across 4 cross-functional teams, establishing the governance cadence that gave leadership real-time visibility into performance and risk.
+- Ran data-driven risk assessments across 20+ micromarkets for land acquisition strategy, and designed and documented the operating model defining ownership and accountability across workstreams.
+
+INTERNSHIPS
+- SysMind LLC, Product Marketing Intern, Noida (May 2024 - Jul 2024): analysed multiple sectors for MelpApp's product-market fit and delivered data-driven go-to-market recommendations.
+- Flipkart, Supply Chain Management Intern, Gurugram (Aug 2021 - Oct 2021): managed inventory, packaging and sorting during Big Billion Days, processing approximately 50,000 orders per hour across a 3-shift fulfilment environment.
+
+PRODUCTS BUILT
+- InterVuex: AI co-pilot for hiring interviews with real-time data structuring and automated reporting.
+- Aura Meetings: extracts decisions, action items and accountability from raw meeting audio.
+- BrowseMind: AI browser-memory tool for retrieving anything read online.
+- Before You Send: Chrome extension automating email quality checks before dispatch.
+
+EDUCATION
+- Master of Business Laws (Hybrid), National Law School of India University (NLSIU), Bangalore | 2025 - 2027
+- M.Sc. Data Science and Management, IIT Ropar and IIM Amritsar (2-Year Full-Time Residential) | 2023 - 2025
+- B.A. Programme (Economics and Commerce), Sri Aurobindo College, University of Delhi | 2020 - 2023
+
+SKILLS
+Strategy & Operations: Program Management, Business Operations, Revenue Operations, Sales Operations, Cross-functional Execution, Stakeholder Management (CEO/MD), Change Management, Process Design, Operating Model Design, Vendor Management, OKRs and KPIs, Go-to-Market Strategy, Market Research, 0-to-1 Build
+Analytics & Automation: Tableau, Power BI, Looker Studio, Advanced Excel, Alteryx, KPI Dashboarding, Business Analysis, n8n, Microsoft Power Automate, Workflow Automation
+AI & Enterprise Systems: Claude (Skills, Cowork, MCP), AI Voice Bots, AI Governance, Salesforce CRM, Zoho Suite, SAP, Gallabox, Ozonetel
