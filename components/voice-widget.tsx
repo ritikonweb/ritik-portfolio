@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import posthog from "posthog-js";
 
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
@@ -63,6 +64,8 @@ export default function VoiceWidget() {
   const failoverRef = useRef<((reason: string) => void) | null>(null);
 
   const teardown = useCallback((note?: string | null) => {
+    const wasActive = activeRef.current;
+    const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
     if (watchdogRef.current !== null) {
       clearInterval(watchdogRef.current);
@@ -81,6 +84,13 @@ export default function VoiceWidget() {
     }
     setPhase("idle");
     if (note !== undefined) setMessage(note);
+    if (wasActive && note !== null) {
+      if (note) {
+        posthog.capture("voice_session_error", { error_message: note, session_duration_ms: sessionDurationMs });
+      } else {
+        posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
+      }
+    }
   }, []);
 
   // Never leave a dangling connection on reload, navigation, or unmount.
@@ -211,6 +221,7 @@ export default function VoiceWidget() {
         setPhase("listening");
         lastActivityRef.current = Date.now();
         startedAtRef.current = Date.now();
+        posthog.capture("voice_session_started");
         watchdogRef.current = setInterval(() => {
           if (!activeRef.current) return;
           const now = Date.now();
