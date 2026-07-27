@@ -116,9 +116,22 @@ async function readPersona(): Promise<string> {
   try {
     const raw = await readFile(path.join(process.cwd(), "bot", "persona.md"), "utf8");
     const cleaned = raw.replace(/<!--[\s\S]*?-->/g, "").trim();
-    // Managed LLMs cap the system prompt, so truncate rather than have the whole
-    // Settings message rejected.
-    return cleaned.length > MAX_PROMPT_CHARS ? cleaned.slice(0, MAX_PROMPT_CHARS) : cleaned;
+    if (cleaned.length <= MAX_PROMPT_CHARS) return cleaned;
+
+    // Managed LLMs cap the system prompt. Trimming from the end would drop "## The
+    // facts", which is where the employment history lives, so cut the worked examples
+    // instead. They shape tone, but the facts are what the bot is not allowed to invent.
+    console.warn(`[voice] persona is ${cleaned.length} chars, over the ${MAX_PROMPT_CHARS} limit`);
+    const examplesStart = cleaned.indexOf("## Questions you will actually be asked");
+    const factsStart = cleaned.indexOf("## The facts");
+    if (examplesStart > 0 && factsStart > examplesStart) {
+      const head = cleaned.slice(0, examplesStart);
+      const tail = cleaned.slice(factsStart);
+      const budget = MAX_PROMPT_CHARS - head.length - tail.length;
+      const examples = budget > 500 ? cleaned.slice(examplesStart, examplesStart + budget) : "";
+      return `${head}${examples}${tail}`.slice(0, MAX_PROMPT_CHARS);
+    }
+    return cleaned.slice(0, MAX_PROMPT_CHARS);
   } catch {
     return "You are Ritik Yadav. Speak briefly and naturally, two or three sentences, no lists or markdown.";
   }
@@ -137,7 +150,7 @@ function buildSpeak() {
         model_id: (process.env.DEEPGRAM_TTS_MODEL_ID || DEFAULT_CARTESIA_MODEL_ID).trim(),
         voice: { mode: "id", id: voiceId },
         speed: Number.isFinite(requested) && requested >= 0.6 && requested <= 1.5 ? requested : DEFAULT_CARTESIA_SPEED,
-        language: "en",
+        language: (process.env.DEEPGRAM_TTS_LANGUAGE || "en").trim(),
       },
     };
   }

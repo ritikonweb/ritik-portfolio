@@ -15,8 +15,8 @@ const MAX_SESSION_MS = 240000;
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 
-// Backstop for the end_conversation function call. The model normally ends the call
-// itself, but a farewell that it fails to act on should still close the session.
+// Backstop for the end_conversation function. The model normally ends the call itself,
+// but a goodbye it fails to act on must still close the session.
 const FAREWELL = new RegExp(
   [
     "\\bbye\\b",
@@ -34,8 +34,13 @@ const FAREWELL = new RegExp(
   ].join("|"),
   "i",
 );
-// Grace period so the closing line is heard in full before the socket drops.
-const CLOSE_GRACE_MS = 1200;
+// After a goodbye, wait at least this long so the agent can start its sign off, then
+// close as soon as playback has drained.
+const CLOSE_MIN_MS = 2200;
+// Absolute backstop. The session never stays open longer than this after a goodbye,
+// even if no closing audio ever arrives.
+const CLOSE_BACKSTOP_MS = 9000;
+const GOODBYE_NOTE = "Thanks for stopping by. Tap to talk again any time.";
 
 const LABELS: Record<Phase, string> = {
   idle: "Let's Talk",
@@ -96,8 +101,8 @@ export default function VoiceWidget() {
   const lastActivityRef = useRef(0);
   const startedAtRef = useRef(0);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closingRef = useRef(false);
+  const closingAtRef = useRef(0);
   // Accounts this visitor already found to be out of credit, so a retry skips them.
   const deadAccounts = useRef<Set<number>>(new Set());
   const transcriptRef = useRef<Array<{ role: "visitor" | "ritik"; text: string }>>([]);
@@ -128,11 +133,8 @@ export default function VoiceWidget() {
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
     closingRef.current = false;
+    closingAtRef.current = 0;
 
-    if (closeTimerRef.current !== null) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
     if (watchdogRef.current !== null) {
       clearInterval(watchdogRef.current);
       watchdogRef.current = null;
@@ -144,16 +146,21 @@ export default function VoiceWidget() {
     micRef.current = null;
     playerRef.current?.dispose();
     playerRef.current = null;
+    // Closing the socket is what finalises the request on Deepgram's side, which is what
+    // makes the session show up in the console logs and usage.
     sessionRef.current?.disconnect();
     sessionRef.current = null;
 
     setPhase("idle");
     if (note !== undefined) setMessage(note);
-    if (wasActive && note !== null) {
-      if (note) {
-        posthog.capture("voice_session_error", { error_message: note, session_duration_ms: sessionDurationMs });
-      } else {
-        posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
+    if (wasActive) {
+      console.info(`[voice] session ended after ${Math.round(sessionDurationMs / 1000)}s`);
+      if (note !== null) {
+        if (note) {
+          posthog.capture("voice_session_error", { error_message: note, session_duration_ms: sessionDurationMs });
+        } else {
+          posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
+        }
       }
     }
   }, [saveTranscript]);
@@ -170,14 +177,25 @@ export default function VoiceWidget() {
     };
   }, [teardown]);
 
-  // Ends the call once the agent has finished its closing line.
-  const closeAfterGoodbye = useCallback(() => {
-    if (closeTimerRef.current !== null) return;
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null;
-      teardown("Thanks for stopping by. Tap to talk again any time.");
-    }, CLOSE_GRACE_MS);
-  }, [teardown]);
+  /**
+   * Arms the end of the conversation. Deliberately not tied to one event, because the
+   * goodbye can be detected before, during or after the closing line depending on whether
+   * it came from the transcript or from the end_conversation function call. The watchdog
+   * then closes as soon as playback drains, with a hard backstop.
+   */
+  const armClose = useCallback((source: string) => {
+    if (closingRef.current || !activeRef.current) return;
+    closingRef.current = true;
+    closingAtRef.current = Date.now();
+    console.info(`[voice] goodbye detected via ${source}, closing once the sign off finishes`);
+  }, []);
+
+  const cancelClose = useCallback(() => {
+    if (!closingRef.current) return;
+    closingRef.current = false;
+    closingAtRef.current = 0;
+    console.info("[voice] close cancelled, visitor asked something else");
+  }, []);
 
   const start = useCallback(async (accountIndex = 0) => {
     setMessage(null);
@@ -197,11 +215,14 @@ export default function VoiceWidget() {
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string; accountsTried?: number };
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string; code?: string; accountsTried?: number; upstreamStatus?: number[]; reasons?: string[];
+        };
         console.error("[voice] session request failed", {
           status: response.status,
           code: body.code ?? null,
-          accountsTried: body.accountsTried ?? null,
+          upstreamStatus: body.upstreamStatus ?? null,
+          reasons: body.reasons ?? null,
         });
         teardown(body.error || "Voice isn't available right now.");
         return;
@@ -217,6 +238,7 @@ export default function VoiceWidget() {
 
     const hasSpare = config.accountIndex + 1 < config.accountCount;
     const failover = (reason: string) => {
+      if (!activeRef.current) return;
       if (!hasSpare) {
         teardown(reason);
         return;
@@ -226,6 +248,31 @@ export default function VoiceWidget() {
       teardown(null);
       setPhase("connecting");
       void start(config.accountIndex + 1);
+    };
+
+    // One timer owns every time-based decision: idle stop, hard cap, and closing after a
+    // goodbye. A single loop is far easier to reason about than nested timeouts.
+    const startWatchdog = () => {
+      if (watchdogRef.current !== null) return;
+      watchdogRef.current = setInterval(() => {
+        if (!activeRef.current) return;
+        const now = Date.now();
+
+        if (closingRef.current) {
+          const sinceGoodbye = now - closingAtRef.current;
+          const remaining = playerRef.current?.getRemainingPlaybackTime() ?? 0;
+          if (sinceGoodbye >= CLOSE_BACKSTOP_MS || (sinceGoodbye >= CLOSE_MIN_MS && remaining <= 0.05)) {
+            teardown(GOODBYE_NOTE);
+          }
+          return;
+        }
+
+        if (now - lastActivityRef.current >= IDLE_STOP_MS) {
+          teardown("Paused after a quiet moment. Tap to talk again.");
+        } else if (now - startedAtRef.current >= MAX_SESSION_MS) {
+          teardown("Session ended. Tap to start a new one.");
+        }
+      }, 500);
     };
 
     try {
@@ -258,9 +305,7 @@ export default function VoiceWidget() {
         // Barge-in: drop whatever is still queued so the agent stops mid sentence.
         player.interrupt();
         lastActivityRef.current = Date.now();
-        // They kept talking, so they did not actually mean goodbye.
-        if (closingRef.current && closeTimerRef.current === null) closingRef.current = false;
-        if (activeRef.current) setPhase("listening");
+        if (activeRef.current && !closingRef.current) setPhase("listening");
       });
 
       session.on("agent-thinking", () => {
@@ -275,11 +320,7 @@ export default function VoiceWidget() {
 
       session.on("agent-audio-done", () => {
         lastActivityRef.current = Date.now();
-        if (closingRef.current && activeRef.current) {
-          closeAfterGoodbye();
-          return;
-        }
-        if (activeRef.current) setPhase("listening");
+        if (activeRef.current && !closingRef.current) setPhase("listening");
       });
 
       session.on("conversation-text", (msg) => {
@@ -287,23 +328,43 @@ export default function VoiceWidget() {
         const role = (msg as { role?: string }).role;
         if (!said) return;
         lastActivityRef.current = Date.now();
-        transcriptRef.current.push({ role: role === "assistant" ? "ritik" : "visitor", text: said });
-        if (role !== "assistant" && FAREWELL.test(said)) closingRef.current = true;
+        const isAgent = role === "assistant";
+        transcriptRef.current.push({ role: isAgent ? "ritik" : "visitor", text: said });
+        if (isAgent) return;
+
+        if (FAREWELL.test(said)) {
+          armClose("transcript");
+          return;
+        }
+        // A real follow up question means they did not mean goodbye after all. Judging
+        // this from the transcript rather than raw voice activity avoids the agent's own
+        // audio, or a cough, keeping the session open forever.
+        if (closingRef.current && said.split(/\s+/).length >= 3) cancelClose();
       });
 
-      // The agent decides when the conversation is over and calls this.
+      // The agent decides the conversation is over and calls this.
       session.on("function-call-request", (msg) => {
         const functions = (msg as { functions?: Array<{ id?: string; name?: string }> }).functions ?? [];
         for (const fn of functions) {
           const name = fn.name ?? "";
+          console.info(`[voice] function call ${name}`);
           session.sendFunctionCallResponse(fn.id, name, JSON.stringify({ ok: true }));
-          if (name === "end_conversation") closingRef.current = true;
+          if (name === "end_conversation") armClose("function call");
         }
       });
 
       session.on("error", (msg) => {
         console.error("[voice] agent error", msg);
         failover("Voice session ended. Try again.");
+      });
+
+      session.on("warning", (msg) => console.warn("[voice] agent warning", msg));
+
+      session.on("disconnected", (reason) => {
+        console.info(`[voice] disconnected: ${reason}`);
+        // The SDK gives up after its reconnect attempts, so make sure the UI does not sit
+        // on "Listening" with a dead socket behind it.
+        if (activeRef.current && !closingRef.current) teardown("Connection dropped. Tap to talk again.");
       });
 
       session.on("sdk-error", (err) => {
@@ -320,27 +381,22 @@ export default function VoiceWidget() {
 
       session.on("settings-applied", () => {
         if (!activeRef.current) return;
+        console.info("[voice] settings applied, agent ready");
         setPhase("listening");
-        // Transcripts are stored, so say so. Delete this line if you drop transcripts.
-        setMessage("Connected. This conversation is transcribed.");
-        lastActivityRef.current = Date.now();
-        startedAtRef.current = Date.now();
-        startedIsoRef.current = new Date().toISOString();
-        transcriptRef.current = [];
-        posthog.capture("voice_session_started");
-
-        watchdogRef.current = setInterval(() => {
-          if (!activeRef.current) return;
-          const now = Date.now();
-          if (now - lastActivityRef.current >= IDLE_STOP_MS) {
-            teardown("Paused after a quiet moment. Tap to talk again.");
-          } else if (now - startedAtRef.current >= MAX_SESSION_MS) {
-            teardown("Session ended. Tap to start a new one.");
-          }
-        }, 1000);
+        setMessage("Connected. This chat is transcribed.");
       });
 
       await session.connect();
+      console.info("[voice] connected");
+
+      // Started here rather than on settings-applied, so the cost guards are armed even
+      // if that acknowledgement never arrives.
+      lastActivityRef.current = Date.now();
+      startedAtRef.current = Date.now();
+      startedIsoRef.current = new Date().toISOString();
+      transcriptRef.current = [];
+      posthog.capture("voice_session_started");
+      startWatchdog();
 
       const mic = new AgentMicrophone((data) => session.sendAudio(data), {
         sampleRate: INPUT_SAMPLE_RATE,
@@ -369,7 +425,7 @@ export default function VoiceWidget() {
         teardown("Couldn't start the conversation. Try again.");
       }
     }
-  }, [closeAfterGoodbye, teardown]);
+  }, [armClose, cancelClose, teardown]);
 
   const toggle = useCallback(() => {
     if (phase === "idle") void start(0);
