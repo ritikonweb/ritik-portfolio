@@ -456,16 +456,33 @@ export default function VoiceWidget() {
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      // Wait for ICE candidates, but do not wait for the long tail of them. A host and
-      // one server-reflexive candidate is enough to connect, so a short debounce and a
-      // hard ceiling cut a second or more off the time before the first hello.
+      // Wait for ICE candidates. We do not need the long tail of them, but we do need at
+      // least one, because an offer with no candidates gets rejected. On a mobile network
+      // the first candidate can take over a second, so the early exit requires a
+      // candidate to have arrived and the hard ceiling stays generous.
       await new Promise<void>((resolve) => {
         if (peer.iceGatheringState === "complete") return resolve();
-        let timer: ReturnType<typeof setTimeout>;
-        const done = () => { clearTimeout(timer); resolve(); };
-        peer.onicecandidate = (event) => { if (event.candidate) { clearTimeout(timer); timer = setTimeout(done, 250); } };
+        let settled = false;
+        let sawCandidate = false;
+        let debounce: ReturnType<typeof setTimeout> | null = null;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          if (debounce !== null) clearTimeout(debounce);
+          clearTimeout(ceiling);
+          resolve();
+        };
+        peer.onicecandidate = (event) => {
+          if (!event.candidate) return done();
+          sawCandidate = true;
+          if (debounce !== null) clearTimeout(debounce);
+          debounce = setTimeout(done, 300);
+        };
         peer.onicegatheringstatechange = () => { if (peer.iceGatheringState === "complete") done(); };
-        timer = setTimeout(done, 1500);
+        const ceiling = setTimeout(() => {
+          if (!sawCandidate) console.warn("[voice] no ICE candidates gathered before timeout");
+          done();
+        }, 3000);
       });
 
       const answer = await fetch(config.callsUrl, {
@@ -474,7 +491,21 @@ export default function VoiceWidget() {
         body: peer.localDescription?.sdp ?? "",
       });
       if (!answer.ok) {
-        failoverRef.current?.("Voice service didn't accept the call. Try again.");
+        // The status and body are the only way to tell an exhausted account from a
+        // malformed offer, so surface them in the console rather than discarding them.
+        const detail = await answer.text().catch(() => "");
+        console.error("[voice] call rejected", {
+          status: answer.status,
+          account: config.accountIndex + 1,
+          of: config.accountCount,
+          detail: detail.slice(0, 500),
+        });
+        const outOfCredit = answer.status === 402 || answer.status === 429 || /quota|credit|billing|balance/i.test(detail);
+        failoverRef.current?.(
+          outOfCredit
+            ? "Voice is out of credit right now. Try again later."
+            : "Voice service didn't accept the call. Try again.",
+        );
         return;
       }
       await peer.setRemoteDescription({ type: "answer", sdp: await answer.text() });
