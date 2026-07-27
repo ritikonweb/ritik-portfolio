@@ -9,6 +9,38 @@ type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 const IDLE_STOP_MS = 15000;
 const MAX_SESSION_MS = 240000;
 
+// Visitor said goodbye. Matched against the finished transcript of a turn, so the bot
+// gets to deliver its sign off first and the session closes after it stops speaking.
+// Deliberately conservative: "thanks" or "ok" alone must not end a conversation.
+const FAREWELL = new RegExp(
+  [
+    "\\bbye\\b",
+    "\\bbye bye\\b",
+    "\\bgood ?bye\\b",
+    "\\bsee you\\b",
+    "\\bsee ya\\b",
+    "\\btalk (to you )?later\\b",
+    "\\bcatch you later\\b",
+    "\\bgood night\\b",
+    "\\bcut the call\\b",
+    "\\bend the call\\b",
+    "\\bhang up\\b",
+    "\\bdisconnect\\b",
+    "\\bthat(')?s all\\b",
+    "\\bthat(')?s it (for now)?\\b",
+    "\\bnothing else\\b",
+    "\\bno more questions\\b",
+    "\\bi(')?m done\\b",
+    "\\balvida\\b",
+    "\\bphir milenge\\b",
+    "\\bchalte hai(n)?\\b",
+    "\\bbas itna\\b",
+  ].join("|"),
+  "i",
+);
+// Grace period after the bot stops speaking, so the sign off is fully heard.
+const FAREWELL_CLOSE_MS = 900;
+
 const LABELS: Record<Phase, string> = {
   idle: "Let's Talk",
   connecting: "Connecting",
@@ -62,11 +94,45 @@ export default function VoiceWidget() {
   const startedAtRef = useRef(0);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const failoverRef = useRef<((reason: string) => void) | null>(null);
+  // Set when the visitor says goodbye. The session closes once the bot finishes its
+  // reply rather than cutting it off mid sentence.
+  const closingRef = useRef(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Running transcript of the conversation, posted once at the end.
+  const transcriptRef = useRef<Array<{ role: "visitor" | "ritik"; text: string }>>([]);
+  const startedIsoRef = useRef<string | null>(null);
+
+  // Ships the finished conversation to the server, which stores it. Fire and forget with
+  // keepalive so it still goes out if the visitor closes the tab mid session.
+  const saveTranscript = useCallback(() => {
+    const turns = transcriptRef.current;
+    transcriptRef.current = [];
+    const startedAt = startedIsoRef.current;
+    startedIsoRef.current = null;
+    // One-sided or empty conversations are not worth storing.
+    if (turns.length < 2) return;
+    try {
+      void fetch("/api/voice/transcript/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startedAt, endedAt: new Date().toISOString(), turns }),
+        keepalive: true,
+      }).catch(() => undefined);
+    } catch {
+      // Storing a transcript must never affect the visitor.
+    }
+  }, []);
 
   const teardown = useCallback((note?: string | null) => {
     const wasActive = activeRef.current;
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
+    closingRef.current = false;
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    saveTranscript();
     if (watchdogRef.current !== null) {
       clearInterval(watchdogRef.current);
       watchdogRef.current = null;
@@ -91,7 +157,7 @@ export default function VoiceWidget() {
         posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
       }
     }
-  }, []);
+  }, [saveTranscript]);
 
   // Never leave a dangling connection on reload, navigation, or unmount.
   useEffect(() => {
@@ -106,16 +172,40 @@ export default function VoiceWidget() {
   }, [teardown]);
 
   const handleEvent = useCallback((raw: string) => {
-    let event: { type?: string };
+    let event: { type?: string; transcript?: string };
     try {
-      event = JSON.parse(raw) as { type?: string };
+      event = JSON.parse(raw) as { type?: string; transcript?: string };
     } catch {
       return;
     }
     const type = event.type ?? "";
     // Any real speech or model output counts as activity and resets the idle timer.
     if (type.startsWith("input_audio_buffer.") || type.startsWith("response.")) lastActivityRef.current = Date.now();
-    if (type === "input_audio_buffer.speech_started") setPhase("listening");
+
+    // Finished transcript of what the visitor said.
+    if (type === "conversation.item.input_audio_transcription.completed") {
+      const said = (event.transcript ?? "").trim();
+      if (said) {
+        transcriptRef.current.push({ role: "visitor", text: said });
+        // Arm the close. The bot still gets to answer, and the persona tells it to sign
+        // off warmly, so the call ends on a sentence rather than a hang up.
+        if (FAREWELL.test(said)) closingRef.current = true;
+      }
+      return;
+    }
+
+    // Finished transcript of what the bot said.
+    if (type === "response.output_audio_transcript.done") {
+      const spoken = (event.transcript ?? "").trim();
+      if (spoken) transcriptRef.current.push({ role: "ritik", text: spoken });
+      return;
+    }
+
+    if (type === "input_audio_buffer.speech_started") {
+      // They started talking again, so they did not actually mean goodbye.
+      if (closingRef.current && closeTimerRef.current === null) closingRef.current = false;
+      setPhase("listening");
+    }
     else if (type === "input_audio_buffer.speech_stopped" || type === "response.created") setPhase("thinking");
     else if (type === "response.output_audio.delta" || type === "output_audio_buffer.started") {
       // Audio arrived, so this account works. Disarm failover from here on, otherwise a
@@ -124,6 +214,14 @@ export default function VoiceWidget() {
       setPhase("speaking");
     }
     else if (type === "response.done" || type === "output_audio_buffer.stopped") {
+      if (closingRef.current && activeRef.current && closeTimerRef.current === null) {
+        setPhase("speaking");
+        closeTimerRef.current = setTimeout(() => {
+          closeTimerRef.current = null;
+          teardown("Thanks for stopping by. Tap to talk again any time.");
+        }, FAREWELL_CLOSE_MS);
+        return;
+      }
       if (activeRef.current) setPhase("listening");
     } else if (type === "error") {
       // Often means the account ran out of credit, so try the next one.
@@ -178,6 +276,7 @@ export default function VoiceWidget() {
       ttsModel: string;
       ttsSpeed: number;
       sttModel: string;
+      languageHints: string[];
       segmenter: string;
       voice: string;
       instructions: string;
@@ -241,8 +340,12 @@ export default function VoiceWidget() {
       channel.onmessage = (event) => handleEvent(String(event.data));
       channel.onopen = () => {
         setPhase("listening");
+        // Transcripts are stored, so say so. Delete this line if you drop transcripts.
+        setMessage("Connected. This conversation is transcribed.");
         lastActivityRef.current = Date.now();
         startedAtRef.current = Date.now();
+        startedIsoRef.current = new Date().toISOString();
+        transcriptRef.current = [];
         posthog.capture("voice_session_started");
         watchdogRef.current = setInterval(() => {
           if (!activeRef.current) return;
@@ -280,14 +383,18 @@ export default function VoiceWidget() {
                   // Names the model would otherwise mishear, plus explicit overrides of
                   // the eagerness preset.
                   prompt: "Conversation with Ritik Yadav, in Indian English and sometimes Hindi. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, Salesforce, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore, crore, lakh.",
-                  // Higher bar before audio counts as speech at all, so room noise,
-                  // traffic and other people talking do not open a turn.
-                  vad_threshold: 0.75,
-                  // Higher bar before the turn is judged finished, so a half sentence
-                  // is not sent to the model as a complete thought.
+                  // Biases recognition toward Indian English and Hindi without locking
+                  // to one language. Soniox only.
+                  language_hints: config.languageHints,
+                  // Documented default is 0.5. Pushing this up rejects noise but also
+                  // swallows the first word of normal speech, which reads as the bot
+                  // mishearing you. 0.55 is a light touch either side.
+                  vad_threshold: 0.55,
+                  // Strong end-of-turn confidence so a half sentence is not sent to the
+                  // model as a complete thought.
                   end_of_turn_confidence_threshold: 0.85,
                   // Long enough not to clip a mid sentence pause, short enough that the
-                  // reply does not feel delayed. 260 was clipping, 480 felt slow.
+                  // reply does not feel delayed.
                   min_end_of_turn_silence: 400,
                   max_turn_silence: 3200,
                 },
@@ -312,7 +419,7 @@ export default function VoiceWidget() {
         channel.send(
           JSON.stringify({
             type: "conversation.item.create",
-            item: { type: "message", role: "user", content: [{ type: "input_text", text: "Say a short hello and ask what they want to know. One sentence." }] },
+            item: { type: "message", role: "user", content: [{ type: "input_text", text: "Greet them briefly and warmly, introduce yourself by name in a few words, and invite their question. One sentence, no questions about them." }] },
           }),
         );
         channel.send(JSON.stringify({ type: "response.create" }));

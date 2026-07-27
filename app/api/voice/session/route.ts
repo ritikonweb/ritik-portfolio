@@ -17,7 +17,11 @@ const DEFAULT_TTS_MODEL = "inworld-tts-2";
 // Speaking rate. 1.0 is the model default and sounds slow in conversation, but pushing
 // too far past this flattens the expressive delivery and stops sounding human.
 const DEFAULT_TTS_SPEED = 1.28;
-const DEFAULT_STT_MODEL = "inworld/inworld-stt-1";
+// Soniox is the only backend that combines high accuracy, semantic end-of-turn and
+// real multilingual support, and the only one that honours language_hints. That matters
+// here because visitors speak Indian English and often switch into Hindi mid sentence.
+const DEFAULT_STT_MODEL = "soniox/stt-rt-v4";
+const DEFAULT_LANGUAGE_HINTS = "en-IN,hi-IN,en-US";
 // fast_start applies strict sentence rules to the first emission, so the opening
 // sentence keeps its intonation, then uses larger chunks for the rest of the turn.
 // Best trade of time-to-first-audio against prosody for a live web widget.
@@ -220,6 +224,10 @@ export async function GET(request: Request) {
             return Number.isFinite(parsed) && parsed >= 0.5 && parsed <= 2 ? parsed : DEFAULT_TTS_SPEED;
           })(),
           sttModel: (process.env.INWORLD_STT_MODEL || DEFAULT_STT_MODEL).trim(),
+          languageHints: (process.env.INWORLD_LANGUAGE_HINTS || DEFAULT_LANGUAGE_HINTS)
+            .split(",")
+            .map((hint) => hint.trim())
+            .filter(Boolean),
           segmenter: (() => {
             const requested = (process.env.INWORLD_TTS_SEGMENTER || "").trim();
             return SEGMENTERS.has(requested) ? requested : DEFAULT_SEGMENTER;
