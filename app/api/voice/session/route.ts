@@ -16,11 +16,12 @@ const DEFAULT_VOICE = "Ashley";
 const DEFAULT_TTS_MODEL = "inworld-tts-2";
 // Speaking rate. 1.0 is the model default and sounds slow in conversation, but pushing
 // too far past this flattens the expressive delivery and stops sounding human.
-const DEFAULT_TTS_SPEED = 1.18;
+const DEFAULT_TTS_SPEED = 1.28;
 const DEFAULT_STT_MODEL = "inworld/inworld-stt-1";
-// "sentence" is the strategy tuned for tts-2. It keeps intonation across a whole
-// sentence, unlike fast_start, without full_turn's wait for the entire reply.
-const DEFAULT_SEGMENTER = "sentence";
+// fast_start applies strict sentence rules to the first emission, so the opening
+// sentence keeps its intonation, then uses larger chunks for the rest of the turn.
+// Best trade of time-to-first-audio against prosody for a live web widget.
+const DEFAULT_SEGMENTER = "fast_start";
 const SEGMENTERS = new Set(["auto", "balanced", "sentence", "full_turn", "fast_start", "per_segment_context"]);
 
 type ApiKey = { key: string; secret: string };

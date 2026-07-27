@@ -261,7 +261,9 @@ export default function VoiceWidget() {
               model: config.model,
               instructions: config.instructions,
               output_modalities: ["audio", "text"],
-              max_output_tokens: 220,
+              // Two or three sentences is the target, so a lower ceiling shortens the
+              // tail of every reply and cuts token spend at the same time.
+              max_output_tokens: 180,
               // Warmer, less deterministic phrasing so answers do not sound recited.
               temperature: 0.9,
               audio: {
@@ -284,9 +286,9 @@ export default function VoiceWidget() {
                   // Higher bar before the turn is judged finished, so a half sentence
                   // is not sent to the model as a complete thought.
                   end_of_turn_confidence_threshold: 0.85,
-                  // Wait most of half a second of real silence before closing the turn.
-                  // The old 260ms was clipping people mid sentence.
-                  min_end_of_turn_silence: 480,
+                  // Long enough not to clip a mid sentence pause, short enough that the
+                  // reply does not feel delayed. 260 was clipping, 480 felt slow.
+                  min_end_of_turn_silence: 400,
                   max_turn_silence: 3200,
                 },
                 tts: {
@@ -299,8 +301,10 @@ export default function VoiceWidget() {
                 // Short "mm-hm" while the visitor is still talking, which is most of what
                 // makes a listener feel human. Quiet and capped so it never talks over.
                 backchannel: { enabled: true, volume_gain: 0.5, max_per_turn: 2, min_gap_ms: 5000, min_speech_ms: 1200 },
-                // Speaks a short filler if the model is slow, instead of dead air.
-                responsiveness: { enabled: true, max_initial_per_turn: 1 },
+                // Speaks a short filler if the model is slow, instead of dead air. Firing
+                // it earlier is the cheapest way to cut *perceived* latency, since the
+                // gap gets filled while the real answer is still being generated.
+                responsiveness: { enabled: true, max_initial_per_turn: 1, initial_wait_timeout_ms: 700 },
               },
             },
           }),
@@ -318,13 +322,16 @@ export default function VoiceWidget() {
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+      // Wait for ICE candidates, but do not wait for the long tail of them. A host and
+      // one server-reflexive candidate is enough to connect, so a short debounce and a
+      // hard ceiling cut a second or more off the time before the first hello.
       await new Promise<void>((resolve) => {
         if (peer.iceGatheringState === "complete") return resolve();
         let timer: ReturnType<typeof setTimeout>;
         const done = () => { clearTimeout(timer); resolve(); };
-        peer.onicecandidate = (event) => { if (event.candidate) { clearTimeout(timer); timer = setTimeout(done, 500); } };
+        peer.onicecandidate = (event) => { if (event.candidate) { clearTimeout(timer); timer = setTimeout(done, 250); } };
         peer.onicegatheringstatechange = () => { if (peer.iceGatheringState === "complete") done(); };
-        timer = setTimeout(done, 3000);
+        timer = setTimeout(done, 1500);
       });
 
       const answer = await fetch(config.callsUrl, {
