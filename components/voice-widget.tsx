@@ -116,6 +116,20 @@ type AgentConfig = {
   accountCount: number;
 };
 
+/**
+ * Minimal shape of the Screen Wake Lock API, declared locally because it is not in every
+ * TypeScript DOM lib yet.
+ */
+type WakeLockSentinel = {
+  readonly released: boolean;
+  release: () => Promise<void>;
+  addEventListener: (type: "release", listener: () => void) => void;
+};
+
+type WakeLockNavigator = Navigator & {
+  wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinel> };
+};
+
 export default function VoiceWidget() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -129,6 +143,18 @@ export default function VoiceWidget() {
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const closingRef = useRef(false);
   const closingAtRef = useRef(0);
+  /**
+   * Epoch counter for the current attempt. Incremented on every start and every teardown.
+   *
+   * start() awaits several things: the config fetch, the SDK import, the socket, then the
+   * microphone. If the visitor stops the session during any of those, teardown runs but
+   * the in-flight continuation carries on and reattaches a live session behind an idle
+   * looking button. Tapping again then produces two agents talking over each other.
+   * Every await is followed by an epoch check so a superseded attempt disposes of its own
+   * objects and exits instead.
+   */
+  const runIdRef = useRef(0);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   // Accounts this visitor already found to be out of credit, so a retry skips them.
   const deadAccounts = useRef<Set<number>>(new Set());
   const transcriptRef = useRef<Array<{ role: "visitor" | "ritik"; text: string }>>([]);
@@ -154,9 +180,42 @@ export default function VoiceWidget() {
     }
   }, []);
 
+  /**
+   * Keeps the screen awake for the duration of a call, so a phone does not lock mid
+   * sentence and kill the microphone. Entirely best effort: unsupported browsers, denied
+   * requests and an already-hidden page all just carry on without it.
+   */
+  const requestWakeLock = useCallback(async () => {
+    const lock = (navigator as WakeLockNavigator).wakeLock;
+    if (!lock || wakeLockRef.current) return;
+    // The request is only granted while the page is visible.
+    if (document.visibilityState !== "visible") return;
+    try {
+      const sentinel = await lock.request("screen");
+      wakeLockRef.current = sentinel;
+      // The browser releases it on its own when the page is hidden, so keep the ref honest.
+      sentinel.addEventListener("release", () => {
+        if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
+      });
+      console.info("[voice] screen wake lock held");
+    } catch {
+      // Denied or unsupported. Nothing to do, the call still works.
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    const sentinel = wakeLockRef.current;
+    wakeLockRef.current = null;
+    if (!sentinel || sentinel.released) return;
+    void sentinel.release().catch(() => undefined);
+  }, []);
+
   const teardown = useCallback((note?: string | null) => {
     const wasActive = activeRef.current;
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
+    // Invalidates any start() still waiting on an await, so it cannot resurrect a session
+    // after this point.
+    runIdRef.current += 1;
     activeRef.current = false;
     closingRef.current = false;
     closingAtRef.current = 0;
@@ -166,10 +225,14 @@ export default function VoiceWidget() {
       watchdogRef.current = null;
     }
 
+    releaseWakeLock();
     saveTranscript();
 
     micRef.current?.stop();
     micRef.current = null;
+    // Interrupt before dispose so anything already buffered stops immediately rather than
+    // finishing its sentence after the button has gone back to idle.
+    playerRef.current?.interrupt();
     playerRef.current?.dispose();
     playerRef.current = null;
     // Closing the socket is what finalises the request on Deepgram's side, which is what
@@ -189,7 +252,17 @@ export default function VoiceWidget() {
         }
       }
     }
-  }, [saveTranscript]);
+  }, [releaseWakeLock, saveTranscript]);
+
+  // The browser drops the wake lock whenever the page is hidden, so take it again on
+  // return if a call is still running.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && activeRef.current) void requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [requestWakeLock]);
 
   // Never leave a dangling connection on reload, navigation, or unmount.
   useEffect(() => {
@@ -242,6 +315,9 @@ export default function VoiceWidget() {
 
     setPhase("connecting");
     activeRef.current = true;
+    const runId = (runIdRef.current += 1);
+    // True only while this attempt is still the current one.
+    const isCurrent = () => runIdRef.current === runId && activeRef.current;
 
     let config: AgentConfig;
     const skip = Array.from(deadAccounts.current).join(",");
@@ -268,12 +344,16 @@ export default function VoiceWidget() {
       return;
     }
 
+    // Stopped while the config was in flight, so do not open anything.
+    if (!isCurrent()) return;
+
     // Loaded on demand so the SDK is not in the initial page bundle.
     const { AgentSession, AgentMicrophone, AgentPlayer } = await import("@deepgram/agents");
+    if (!isCurrent()) return;
 
     const hasSpare = config.accountIndex + 1 < config.accountCount;
     const failover = (reason: string) => {
-      if (!activeRef.current) return;
+      if (!isCurrent()) return;
       if (!hasSpare) {
         teardown(reason);
         return;
@@ -334,7 +414,12 @@ export default function VoiceWidget() {
       });
       sessionRef.current = session;
 
-      session.on("audio", (chunk) => player.queue(chunk));
+      // Every handler is gated on the epoch, so a superseded session that has not finished
+      // closing yet cannot produce audio or drive the UI.
+      session.on("audio", (chunk) => {
+        if (!isCurrent()) return;
+        player.queue(chunk);
+      });
 
       session.on("user-started-speaking", () => {
         // Barge-in: drop whatever is still queued so the agent stops mid sentence.
@@ -406,6 +491,7 @@ export default function VoiceWidget() {
 
       session.on("disconnected", (reason) => {
         console.info(`[voice] disconnected: ${reason}`);
+        if (!isCurrent()) return;
         // The SDK gives up after its reconnect attempts, so make sure the UI does not sit
         // on "Listening" with a dead socket behind it.
         if (activeRef.current && !closingRef.current) teardown("Connection dropped.");
@@ -424,14 +510,25 @@ export default function VoiceWidget() {
       });
 
       session.on("settings-applied", () => {
-        if (!activeRef.current) return;
+        if (!isCurrent()) return;
         console.info("[voice] settings applied, agent ready");
         setPhase("listening");
         setMessage("Connected. Chat is transcribed.");
       });
 
       await session.connect();
+
+      // Stopped while the socket was opening. Dispose of this attempt's own objects, since
+      // teardown has already cleared the refs and cannot see them.
+      if (!isCurrent()) {
+        console.info("[voice] connect completed after stop, discarding session");
+        session.disconnect();
+        player.interrupt();
+        player.dispose();
+        return;
+      }
       console.info("[voice] connected");
+      void requestWakeLock();
 
       // Started here rather than on settings-applied, so the cost guards are armed even
       // if that acknowledgement never arrives.
@@ -451,10 +548,22 @@ export default function VoiceWidget() {
       micRef.current = mic;
       mic.on("error", (err) => {
         console.error("[voice] microphone error", err);
-        teardown("Mic blocked. Allow it in site settings.");
+        if (isCurrent()) teardown("Mic blocked. Allow it in site settings.");
       });
       await mic.start();
+
+      // Stopped while the microphone was being acquired.
+      if (!isCurrent()) {
+        console.info("[voice] mic started after stop, discarding session");
+        mic.stop();
+        session.disconnect();
+        player.interrupt();
+        player.dispose();
+        return;
+      }
     } catch (error) {
+      // A failure on a superseded attempt is not worth showing to the visitor.
+      if (!isCurrent()) return;
       const name = (error as DOMException)?.name;
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         teardown("Mic blocked. Allow it in site settings.");
@@ -469,7 +578,7 @@ export default function VoiceWidget() {
         teardown("Couldn't connect. Try again.");
       }
     }
-  }, [armClose, cancelClose, teardown]);
+  }, [armClose, cancelClose, requestWakeLock, teardown]);
 
   const toggle = useCallback(() => {
     if (phase === "idle") void start(0);
