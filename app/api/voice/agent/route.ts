@@ -240,10 +240,14 @@ export async function GET(request: Request) {
 
   // Accounts the caller already found to be out of credit. Skipping them keeps the next
   // attempt instant instead of spending a round trip on a key that will be refused.
+  // Note the empty-string filter: "".split(",") is [""], and Number("") is 0, so without
+  // it an absent skip parameter would skip account 0 on every single request.
   const skip = new Set(
     (params.get("skip") || "")
       .split(",")
-      .map((value) => Number(value.trim()))
+      .map((value) => value.trim())
+      .filter((value) => value !== "")
+      .map((value) => Number(value))
       .filter((value) => Number.isInteger(value) && value >= 0),
   );
 
