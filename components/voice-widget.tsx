@@ -126,7 +126,11 @@ export default function VoiceWidget() {
     }
   }, []);
 
-  const teardown = useCallback((note?: string | null) => {
+  // Accounts this visitor has already found to be out of credit. Held for the tab so a
+  // second attempt does not walk into the same dead key again.
+  const deadAccounts = useRef<Set<number>>(new Set());
+
+  const teardown = useCallback((note?: string | null, keepStream = false) => {
     const wasActive = activeRef.current;
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
@@ -143,8 +147,13 @@ export default function VoiceWidget() {
     }
     channelRef.current?.close();
     channelRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    // On a silent failover the microphone track is reused. Releasing and re-requesting it
+    // would need a fresh permission gesture, which Safari refuses outside a click, and it
+    // makes the switch visible to the visitor.
+    if (!keepStream) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
     peerRef.current?.close();
     peerRef.current = null;
     if (audioRef.current) {
@@ -254,17 +263,21 @@ export default function VoiceWidget() {
 
     // Ask for the mic first, while we are still inside the click gesture.
     // Safari refuses the permission prompt if an await (like fetch) happens first.
+    // On a silent failover the previous track is still live, so it is reused instead.
+    const liveTrack = streamRef.current?.getAudioTracks().some((track) => track.readyState === "live");
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          // Levels out a quiet or distant speaker, which is half the reason words get
-          // misheard. Mono avoids the browser downmixing for us.
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
+      if (!liveTrack) {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            // Levels out a quiet or distant speaker, which is half the reason words get
+            // misheard. Mono avoids the browser downmixing for us.
+            autoGainControl: true,
+            channelCount: 1,
+          },
+        });
+      }
     } catch (error) {
       const name = (error as DOMException)?.name;
       if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
@@ -296,7 +309,11 @@ export default function VoiceWidget() {
     };
 
     try {
-      const response = await fetch(`/api/voice/session/?account=${accountIndex}`, { cache: "no-store" });
+      const skip = Array.from(deadAccounts.current).join(",");
+      const response = await fetch(
+        `/api/voice/session/?account=${accountIndex}${skip ? `&skip=${skip}` : ""}`,
+        { cache: "no-store" },
+      );
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string; accountsTried?: number };
         // Visitors see a plain message; the diagnostic detail goes to the console only.
@@ -322,7 +339,10 @@ export default function VoiceWidget() {
         teardown(reason);
         return;
       }
-      teardown(null);
+      // Keep the microphone open so the switch is invisible to the visitor and no second
+      // permission gesture is needed.
+      teardown(null, true);
+      setPhase("connecting");
       void start(config.accountIndex + 1);
     };
 
@@ -452,7 +472,12 @@ export default function VoiceWidget() {
         channel.send(JSON.stringify({ type: "response.create" }));
       };
 
-      streamRef.current.getAudioTracks().forEach((track) => peer.addTrack(track, streamRef.current as MediaStream));
+      const micStream = streamRef.current;
+      if (!micStream) {
+        teardown("Microphone stopped unexpectedly. Try again.");
+        return;
+      }
+      micStream.getAudioTracks().forEach((track) => peer.addTrack(track, micStream));
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
@@ -501,6 +526,8 @@ export default function VoiceWidget() {
           detail: detail.slice(0, 500),
         });
         const outOfCredit = answer.status === 402 || answer.status === 429 || /quota|credit|billing|balance/i.test(detail);
+        // Remember the dead account so the next attempt in this tab skips it outright.
+        if (outOfCredit) deadAccounts.current.add(config.accountIndex);
         failoverRef.current?.(
           outOfCredit
             ? "Voice is out of credit right now. Try again later."

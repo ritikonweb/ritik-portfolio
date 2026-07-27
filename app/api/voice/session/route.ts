@@ -31,17 +31,34 @@ const SEGMENTERS = new Set(["auto", "balanced", "sentence", "full_turn", "fast_s
 type ApiKey = { key: string; secret: string };
 type Account = { credential: string; voice: string };
 
-/** Reads the primary account plus any numbered fallbacks (…_2, _3, …). */
+/**
+ * Reads the primary account plus every numbered fallback.
+ *
+ * Discovered from the environment rather than a fixed range, so adding
+ * INWORLD_API_KEY_4 through _9 or beyond in the hosting dashboard is picked up with no
+ * code change. Gaps are fine: if _5 exists but _4 does not, _5 is still used. Numeric
+ * order is preserved so the primary key is always tried first.
+ */
 function loadAccounts(): Account[] {
   const accounts: Account[] = [];
   const push = (credential?: string, voice?: string) => {
     const trimmed = (credential || "").trim();
     if (trimmed) accounts.push({ credential: trimmed, voice: (voice || "").trim() || DEFAULT_VOICE });
   };
+
   push(process.env.INWORLD_API_KEY, process.env.INWORLD_VOICE_ID);
-  for (let i = 2; i <= 5; i += 1) {
-    push(process.env[`INWORLD_API_KEY_${i}`], process.env[`INWORLD_VOICE_ID_${i}`]);
+
+  const numbered = Object.keys(process.env)
+    .map((name) => /^INWORLD_API_KEY_(\d+)$/.exec(name))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => Number(match[1]))
+    .filter((index) => Number.isFinite(index) && index >= 2)
+    .sort((a, b) => a - b);
+
+  for (const index of numbered) {
+    push(process.env[`INWORLD_API_KEY_${index}`], process.env[`INWORLD_VOICE_ID_${index}`]);
   }
+
   return accounts;
 }
 
@@ -189,8 +206,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Too many voice sessions. Try again in a few minutes." }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
-  const requested = Number(new URL(request.url).searchParams.get("account") || 0);
+  const params = new URL(request.url).searchParams;
+  const requested = Number(params.get("account") || 0);
   const startAt = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 0;
+
+  // Accounts the caller already found to be out of credit. Skipping them keeps the next
+  // attempt instant instead of spending a round trip on a key that will be refused.
+  const skip = new Set(
+    (params.get("skip") || "")
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value >= 0),
+  );
+
   if (startAt >= accounts.length) {
     return NextResponse.json({ error: "Voice is unavailable right now." }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }
@@ -201,6 +229,7 @@ export async function GET(request: Request) {
   // broken key automatically falls through to the next.
   const failures: string[] = [];
   for (let index = startAt; index < accounts.length; index += 1) {
+    if (skip.has(index)) continue;
     const account = accounts[index];
     try {
       const credential = parseCredential(account.credential);
