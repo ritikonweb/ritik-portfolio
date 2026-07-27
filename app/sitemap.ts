@@ -2,14 +2,21 @@ import type { MetadataRoute } from "next";
 
 const base = "https://ritik.co.in";
 
+/**
+ * One page, one entry.
+ *
+ * Fragment URLs like /#about were listed here previously. Google strips the fragment when
+ * it reads a sitemap, so those five lines were submitted as the homepage five extra times.
+ * At best it is noise, at worst it looks like a sitemap full of duplicates. Anchors are
+ * discovered from the page's own navigation anyway.
+ */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
   return [
-    { url: `${base}/`, lastModified, changeFrequency: "monthly", priority: 1 },
-    { url: `${base}/#about`, lastModified, changeFrequency: "monthly", priority: 0.8 },
-    { url: `${base}/#experience`, lastModified, changeFrequency: "monthly", priority: 0.8 },
-    { url: `${base}/#projects`, lastModified, changeFrequency: "monthly", priority: 0.7 },
-    { url: `${base}/#education`, lastModified, changeFrequency: "yearly", priority: 0.5 },
-    { url: `${base}/#contact`, lastModified, changeFrequency: "yearly", priority: 0.6 },
+    {
+      url: `${base}/`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 1,
+    },
   ];
 }
