@@ -28,8 +28,9 @@ const DEFAULT_TEMPERATURE = 0.8;
 // break and emotion tags, which is what stops the voice sounding synthetic.
 const DEFAULT_CARTESIA_MODEL_ID = "sonic-3";
 const DEFAULT_CARTESIA_VOICE_ID = "726d5ae5-055f-4c3d-8355-d9677de68937";
-// Slightly above natural. Sonic accepts 0.6 to 1.5 as a multiplier.
-const DEFAULT_CARTESIA_SPEED = 1.08;
+// Natural pace. Anything faster and the opening line, which carries the name, becomes
+// hard to catch. Sonic accepts 0.6 to 1.5 as a multiplier.
+const DEFAULT_CARTESIA_SPEED = 1.0;
 // Only used if the Cartesia voice is explicitly disabled.
 const DEFAULT_TTS_MODEL = "aura-2-arcas-en";
 
@@ -44,8 +45,13 @@ const KEYTERMS = [
   "Bangalore", "crore", "lakh", "Chief of Staff",
 ];
 
-// Written the way a person actually answers, not the way a product announces itself.
-const GREETING = "Hey, Ritik here. So, what would you like to know?";
+/**
+ * The opening line, and the only sentence guaranteed to be spoken, so the name has to be
+ * unmistakable. Three short sentences instead of one run-on, because each full stop is a
+ * real pause and the name gets a clause of its own. "Rithik" is a phonetic respelling:
+ * spelled "Ritik" the voice anglicises it to a hard T.
+ */
+const GREETING = "Hello. My name is Rithik Yadav. What would you like to know?";
 
 type Account = { key: string };
 

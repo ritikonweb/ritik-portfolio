@@ -219,6 +219,15 @@ export default function VoiceWidget() {
   }, []);
 
   const start = useCallback(async (accountIndex = 0) => {
+    // Guard against a second session being opened before React has re-rendered the
+    // button out of its idle state. Two taps in quick succession used to start two
+    // agents at once, which is heard as an echo. A ref is checked because state updates
+    // are async and the click handler can see a stale phase.
+    if (activeRef.current) {
+      console.warn("[voice] start ignored, a session is already active");
+      return;
+    }
+
     setMessage(null);
 
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
