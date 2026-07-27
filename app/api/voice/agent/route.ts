@@ -291,6 +291,8 @@ export async function GET(request: Request) {
       // Upstream status codes only. Safe to expose and it is the one thing needed to
       // diagnose this without reading the hosting logs.
       upstreamStatus: statuses,
+      // Failure reasons with the account label stripped. Never contains the credential.
+      reasons: failures.map((entry) => entry.replace(/^account \d+\/\d+: /, "").slice(0, 200)),
       accountsTried: accounts.length - startAt,
     },
     { status: 502, headers: { "Cache-Control": "no-store" } },
