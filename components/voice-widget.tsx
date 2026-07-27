@@ -146,7 +146,16 @@ export default function VoiceWidget() {
     // Ask for the mic first, while we are still inside the click gesture.
     // Safari refuses the permission prompt if an await (like fetch) happens first.
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          // Levels out a quiet or distant speaker, which is half the reason words get
+          // misheard. Mono avoids the browser downmixing for us.
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
     } catch (error) {
       const name = (error as DOMException)?.name;
       if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
@@ -168,6 +177,8 @@ export default function VoiceWidget() {
       model: string;
       ttsModel: string;
       ttsSpeed: number;
+      sttModel: string;
+      segmenter: string;
       voice: string;
       instructions: string;
       accountIndex: number;
@@ -255,28 +266,39 @@ export default function VoiceWidget() {
               temperature: 0.9,
               audio: {
                 input: {
-                  transcription: { model: "inworld/inworld-stt-1" },
-                  turn_detection: { type: "semantic_vad", eagerness: "medium", create_response: true, interrupt_response: true },
+                  transcription: { model: config.sttModel },
+                  // "low" eagerness tolerates the pauses people leave mid sentence
+                  // instead of ending the turn on them.
+                  turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
                 },
                 output: { model: config.ttsModel, voice: config.voice, speed: config.ttsSpeed },
               },
               providerData: {
                 stt: {
-                  // Names the model would otherwise mishear, plus tuning that ends turns
-                  // quickly without letting the bot's own audio interrupt it.
-                  prompt: "Conversation with Ritik Yadav. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore.",
-                  end_of_turn_confidence_threshold: 0.8,
-                  vad_threshold: 0.6,
-                  min_end_of_turn_silence: 260,
-                  max_turn_silence: 2600,
+                  // Names the model would otherwise mishear, plus explicit overrides of
+                  // the eagerness preset.
+                  prompt: "Conversation with Ritik Yadav, in Indian English and sometimes Hindi. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, Salesforce, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore, crore, lakh.",
+                  // Higher bar before audio counts as speech at all, so room noise,
+                  // traffic and other people talking do not open a turn.
+                  vad_threshold: 0.75,
+                  // Higher bar before the turn is judged finished, so a half sentence
+                  // is not sent to the model as a complete thought.
+                  end_of_turn_confidence_threshold: 0.85,
+                  // Wait most of half a second of real silence before closing the turn.
+                  // The old 260ms was clipping people mid sentence.
+                  min_end_of_turn_silence: 480,
+                  max_turn_silence: 3200,
                 },
                 tts: {
-                  // CREATIVE is the expressive preset; fast_start gets the first words
-                  // out quickly so replies do not feel sluggish.
+                  // CREATIVE is the expressive preset. The segmenter is configurable
+                  // because it trades intonation quality against time to first audio.
                   delivery_mode: "CREATIVE",
-                  segmenter_strategy: "fast_start",
+                  segmenter_strategy: config.segmenter,
                   steering_handling: "emit_once",
                 },
+                // Short "mm-hm" while the visitor is still talking, which is most of what
+                // makes a listener feel human. Quiet and capped so it never talks over.
+                backchannel: { enabled: true, volume_gain: 0.5, max_per_turn: 2, min_gap_ms: 5000, min_speech_ms: 1200 },
                 // Speaks a short filler if the model is slow, instead of dead air.
                 responsiveness: { enabled: true, max_initial_per_turn: 1 },
               },

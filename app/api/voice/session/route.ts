@@ -14,8 +14,14 @@ const DEFAULT_VOICE = "Ashley";
 // tts-2 costs more ($25 vs $15 per 1M chars) but is the only model with the
 // expressive delivery presets, so it is worth it for a human sounding voice.
 const DEFAULT_TTS_MODEL = "inworld-tts-2";
-// Speaking rate. 1.0 is the model default, which sounds slow in conversation.
-const DEFAULT_TTS_SPEED = 1.35;
+// Speaking rate. 1.0 is the model default and sounds slow in conversation, but pushing
+// too far past this flattens the expressive delivery and stops sounding human.
+const DEFAULT_TTS_SPEED = 1.18;
+const DEFAULT_STT_MODEL = "inworld/inworld-stt-1";
+// "sentence" is the strategy tuned for tts-2. It keeps intonation across a whole
+// sentence, unlike fast_start, without full_turn's wait for the entire reply.
+const DEFAULT_SEGMENTER = "sentence";
+const SEGMENTERS = new Set(["auto", "balanced", "sentence", "full_turn", "fast_start", "per_segment_context"]);
 
 type ApiKey = { key: string; secret: string };
 type Account = { credential: string; voice: string };
@@ -211,6 +217,11 @@ export async function GET(request: Request) {
             const parsed = Number(process.env.INWORLD_TTS_SPEED);
             // Clamp so a bad value cannot make the voice unusable.
             return Number.isFinite(parsed) && parsed >= 0.5 && parsed <= 2 ? parsed : DEFAULT_TTS_SPEED;
+          })(),
+          sttModel: (process.env.INWORLD_STT_MODEL || DEFAULT_STT_MODEL).trim(),
+          segmenter: (() => {
+            const requested = (process.env.INWORLD_TTS_SEGMENTER || "").trim();
+            return SEGMENTERS.has(requested) ? requested : DEFAULT_SEGMENTER;
           })(),
           voice: account.voice,
           instructions: persona,
