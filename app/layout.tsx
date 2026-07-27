@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Albert_Sans, Fragment_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { PHProvider } from "@/app/providers";
 import site from "@/content/site.json";
 import "./globals.css";
 
@@ -78,7 +79,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang={site.metadata.language} className={`${albert.variable} ${fragment.variable}`}>
       <body>
-        {children}
+        <PHProvider>
+          {children}
+        </PHProvider>
         <Analytics />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       </body>

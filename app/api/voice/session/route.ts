@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,6 +124,9 @@ export async function GET(request: Request) {
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (rateLimited(ip)) {
+    const phRl = getPostHogClient();
+    phRl.capture({ distinctId: ip, event: "voice_api_rate_limited" });
+    await phRl.shutdown();
     return NextResponse.json({ error: "Too many voice sessions. Try again in a few minutes." }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -141,6 +145,9 @@ export async function GET(request: Request) {
     try {
       const jwt = await mintJwt(parseCredential(account.credential));
       const iceServers = await fetchIceServers(jwt.token);
+      const phSession = getPostHogClient();
+      phSession.capture({ distinctId: ip, event: "voice_api_session_created", properties: { account_index: index } });
+      await phSession.shutdown();
       return NextResponse.json(
         {
           token: jwt.token,
