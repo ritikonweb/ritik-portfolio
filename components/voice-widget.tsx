@@ -98,6 +98,9 @@ export default function VoiceWidget() {
   // reply rather than cutting it off mid sentence.
   const closingRef = useRef(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Resends the session config with the first party STT model, used when the configured
+  // one is not enabled on the account.
+  const sttRetryRef = useRef<(() => void) | null>(null);
   // Running transcript of the conversation, posted once at the end.
   const transcriptRef = useRef<Array<{ role: "visitor" | "ritik"; text: string }>>([]);
   const startedIsoRef = useRef<string | null>(null);
@@ -128,6 +131,7 @@ export default function VoiceWidget() {
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
     closingRef.current = false;
+    sttRetryRef.current = null;
     if (closeTimerRef.current !== null) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
@@ -224,7 +228,14 @@ export default function VoiceWidget() {
       }
       if (activeRef.current) setPhase("listening");
     } else if (type === "error") {
-      // Often means the account ran out of credit, so try the next one.
+      // An unrecognised STT model rejects the whole session.update rather than just that
+      // field, so retry once with the first party model before giving up on the session.
+      const param = (event as { error?: { param?: string } }).error?.param ?? "";
+      if (param.includes("transcription.model") && sttRetryRef.current) {
+        sttRetryRef.current();
+        return;
+      }
+      // Otherwise this often means the account ran out of credit, so try the next one.
       if (failoverRef.current) failoverRef.current("Voice session ended. Try again.");
       else teardown("Voice session ended. Try again.");
     }
@@ -356,7 +367,12 @@ export default function VoiceWidget() {
             teardown("Session ended. Tap to start a new one.");
           }
         }, 1000);
-        channel.send(
+        // Built as a function so it can be resent with a different STT model if the
+        // configured one is not enabled on the account. Inworld rejects the whole
+        // session.update when the model is unrecognised, so without this a bad STT
+        // model would take the entire session down.
+        const sendSessionUpdate = (sttModel: string, hints: string[]) => {
+          channelRef.current?.send(
           JSON.stringify({
             type: "session.update",
             session: {
@@ -371,7 +387,7 @@ export default function VoiceWidget() {
               temperature: 0.9,
               audio: {
                 input: {
-                  transcription: { model: config.sttModel },
+                  transcription: { model: sttModel },
                   // "low" eagerness tolerates the pauses people leave mid sentence
                   // instead of ending the turn on them.
                   turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
@@ -384,8 +400,8 @@ export default function VoiceWidget() {
                   // the eagerness preset.
                   prompt: "Conversation with Ritik Yadav, in Indian English and sometimes Hindi. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, Salesforce, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore, crore, lakh.",
                   // Biases recognition toward Indian English and Hindi without locking
-                  // to one language. Soniox only.
-                  language_hints: config.languageHints,
+                  // to one language. Soniox only, ignored by other backends.
+                  language_hints: hints,
                   // Documented default is 0.5. Pushing this up rejects noise but also
                   // swallows the first word of normal speech, which reads as the bot
                   // mishearing you. 0.55 is a light touch either side.
@@ -415,7 +431,18 @@ export default function VoiceWidget() {
               },
             },
           }),
-        );
+          );
+        };
+
+        // Exposed so the error handler can retry with the first party STT model if the
+        // configured one is not available on this account.
+        sttRetryRef.current = () => {
+          sttRetryRef.current = null;
+          console.warn("[voice] STT model rejected, falling back to inworld/inworld-stt-1");
+          sendSessionUpdate("inworld/inworld-stt-1", []);
+        };
+
+        sendSessionUpdate(config.sttModel, config.languageHints);
         channel.send(
           JSON.stringify({
             type: "conversation.item.create",
