@@ -117,7 +117,12 @@ export default function VoiceWidget() {
     if (type.startsWith("input_audio_buffer.") || type.startsWith("response.")) lastActivityRef.current = Date.now();
     if (type === "input_audio_buffer.speech_started") setPhase("listening");
     else if (type === "input_audio_buffer.speech_stopped" || type === "response.created") setPhase("thinking");
-    else if (type === "response.output_audio.delta" || type === "output_audio_buffer.started") setPhase("speaking");
+    else if (type === "response.output_audio.delta" || type === "output_audio_buffer.started") {
+      // Audio arrived, so this account works. Disarm failover from here on, otherwise a
+      // late error would silently open a second paid session the visitor never asked for.
+      failoverRef.current = null;
+      setPhase("speaking");
+    }
     else if (type === "response.done" || type === "output_audio_buffer.stopped") {
       if (activeRef.current) setPhase("listening");
     } else if (type === "error") {
@@ -172,7 +177,13 @@ export default function VoiceWidget() {
     try {
       const response = await fetch(`/api/voice/session/?account=${accountIndex}`, { cache: "no-store" });
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string; accountsTried?: number };
+        // Visitors see a plain message; the diagnostic detail goes to the console only.
+        console.error("[voice] session request failed", {
+          status: response.status,
+          code: body.code ?? null,
+          accountsTried: body.accountsTried ?? null,
+        });
         teardown(body.error || "Voice isn't available right now.");
         return;
       }

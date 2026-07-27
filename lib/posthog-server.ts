@@ -1,16 +1,38 @@
 import { PostHog } from "posthog-node";
 
-export function getPostHogClient(): PostHog {
+/**
+ * Returns a server side PostHog client, or null when analytics is not configured.
+ *
+ * This must never throw. It is called from inside request handlers, including the
+ * paid voice session route, where a thrown analytics error gets swallowed by the
+ * surrounding catch and looks exactly like the feature itself failing.
+ */
+export function getPostHogClient(): PostHog | null {
   const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-  if (!token) {
-    throw new Error(
-      "NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN is configured",
-    );
+  if (!token) return null;
+  try {
+    return new PostHog(token, { host, flushAt: 1, flushInterval: 0 });
+  } catch {
+    return null;
   }
-  return new PostHog(token, {
-    host,
-    flushAt: 1,
-    flushInterval: 0,
-  });
+}
+
+/**
+ * Fire and forget event capture. Swallows every failure on purpose so analytics
+ * can never take a feature down or add latency to a failed request path.
+ */
+export async function captureServerEvent(
+  distinctId: string,
+  event: string,
+  properties?: Record<string, unknown>,
+): Promise<void> {
+  const client = getPostHogClient();
+  if (!client) return;
+  try {
+    client.capture({ distinctId, event, properties });
+    await client.shutdown();
+  } catch {
+    // Analytics is best effort. Never surface this to the caller.
+  }
 }

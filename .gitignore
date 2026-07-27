@@ -18,3 +18,7 @@ cv/
 applications/
 scripts/pdf-text-check.mjs
 .env.local
+
+# Local diagnostics for the voice bot, never published
+scripts/voice-key-test.mjs
+scripts/voice-audit-accounts.mjs

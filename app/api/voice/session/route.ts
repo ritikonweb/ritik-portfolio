@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { getPostHogClient } from "@/lib/posthog-server";
+import { captureServerEvent } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,14 +34,32 @@ function loadAccounts(): Account[] {
   return accounts;
 }
 
-/** Splits the Base64 "key:secret" credential from the Inworld portal. */
-function parseCredential(basic: string): ApiKey {
-  const decoded = Buffer.from(basic, "base64").toString("utf8");
-  const index = decoded.indexOf(":");
-  const key = index > 0 ? decoded.slice(0, index) : "";
-  const secret = index > 0 ? decoded.slice(index + 1) : "";
-  if (!key || !secret) throw new Error('Credential must be base64 of "key:secret"');
-  return { key, secret };
+/**
+ * Splits the Base64 "key:secret" credential from the Inworld portal.
+ * Tolerates the two mistakes that are easy to make when pasting into a hosting
+ * dashboard: wrapping quotes / stray newlines, and pasting the raw "key:secret"
+ * pair instead of its Base64 form.
+ */
+function parseCredential(raw: string): ApiKey & { basic: string } {
+  const cleaned = raw.replace(/\s+/g, "").replace(/^['"]|['"]$/g, "");
+  if (!cleaned) throw new Error("bad_credential: empty");
+
+  const split = (value: string): ApiKey | null => {
+    const index = value.indexOf(":");
+    if (index <= 0) return null;
+    const key = value.slice(0, index);
+    const secret = value.slice(index + 1);
+    return key && secret ? { key, secret } : null;
+  };
+
+  // Already in plain "key:secret" form, so build the Basic form ourselves.
+  const plain = split(cleaned);
+  if (plain) return { ...plain, basic: Buffer.from(cleaned, "utf8").toString("base64") };
+
+  const decoded = Buffer.from(cleaned, "base64").toString("utf8");
+  const parsed = split(decoded);
+  if (!parsed) throw new Error('bad_credential: expected base64 of "key:secret"');
+  return { ...parsed, basic: cleaned };
 }
 
 function getDateTime(): string {
@@ -62,16 +80,48 @@ function buildAuthorizationHeader({ key, secret }: ApiKey): string {
   return `IW1-HMAC-SHA256 ApiKey=${key},DateTime=${datetime},Nonce=${nonce},Signature=${signature}`;
 }
 
-/** Mints a short-lived JWT so the browser never receives the API credential. */
-async function mintJwt(apiKey: ApiKey) {
+type Minted = { token: string; expirationTime?: string };
+
+async function requestToken(apiKey: ApiKey, authorization: string): Promise<Minted> {
   const response = await fetch(`https://${INWORLD_HOST}/auth/v1/tokens/token:generate`, {
     method: "POST",
-    headers: { Authorization: buildAuthorizationHeader(apiKey), "Content-Type": "application/json" },
+    headers: { Authorization: authorization, "Content-Type": "application/json" },
     body: JSON.stringify({ key: apiKey.key, resources: [] }),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Token request failed (${response.status})`);
-  return (await response.json()) as { token: string; expirationTime?: string };
+  if (!response.ok) {
+    // Inworld's body carries the real reason (revoked key, wrong key type, no credit).
+    // Keep it in the server log only, it can echo back parts of the request.
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    throw new Error(`${response.status} ${detail}`);
+  }
+  const payload = (await response.json()) as { token?: string; expirationTime?: string };
+  if (!payload.token) throw new Error("200 but response had no token");
+  return payload as Minted;
+}
+
+/**
+ * Mints a short-lived JWT so the browser never receives the API credential.
+ *
+ * IW1-HMAC-SHA256 is the style these keys actually accept, verified against the live
+ * endpoint, so it goes first. Basic stays as a fallback in case a future key type
+ * only supports it.
+ */
+async function mintJwt(apiKey: ApiKey, basicCredential: string): Promise<Minted> {
+  const attempts: Array<[string, string]> = [
+    ["iw1-hmac", buildAuthorizationHeader(apiKey)],
+    ["basic", `Basic ${basicCredential}`],
+  ];
+
+  const errors: string[] = [];
+  for (const [label, authorization] of attempts) {
+    try {
+      return await requestToken(apiKey, authorization);
+    } catch (error) {
+      errors.push(`${label} -> ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  throw new Error(`token_request_failed: ${errors.join(" | ")}`);
 }
 
 async function fetchIceServers(jwt: string) {
@@ -124,9 +174,7 @@ export async function GET(request: Request) {
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (rateLimited(ip)) {
-    const phRl = getPostHogClient();
-    phRl.capture({ distinctId: ip, event: "voice_api_rate_limited" });
-    await phRl.shutdown();
+    await captureServerEvent(ip, "voice_api_rate_limited");
     return NextResponse.json({ error: "Too many voice sessions. Try again in a few minutes." }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -140,14 +188,17 @@ export async function GET(request: Request) {
 
   // Walk the accounts in order until one mints a token, so an exhausted or
   // broken key automatically falls through to the next.
+  const failures: string[] = [];
   for (let index = startAt; index < accounts.length; index += 1) {
     const account = accounts[index];
     try {
-      const jwt = await mintJwt(parseCredential(account.credential));
+      const credential = parseCredential(account.credential);
+      const jwt = await mintJwt(credential, credential.basic);
       const iceServers = await fetchIceServers(jwt.token);
-      const phSession = getPostHogClient();
-      phSession.capture({ distinctId: ip, event: "voice_api_session_created", properties: { account_index: index } });
-      await phSession.shutdown();
+      // Fire and forget. Not awaited so analytics never adds latency to the start of a
+      // call, and captureServerEvent swallows its own errors so it cannot be mistaken
+      // for a failed account by the catch below.
+      void captureServerEvent(ip, "voice_api_session_created", { account_index: index });
       return NextResponse.json(
         {
           token: jwt.token,
@@ -168,10 +219,24 @@ export async function GET(request: Request) {
         },
         { headers: { "Cache-Control": "no-store" } },
       );
-    } catch {
-      // Try the next account.
+    } catch (error) {
+      // Log the real cause so it is visible in the hosting logs, then try the next account.
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`account ${index + 1}/${accounts.length}: ${message}`);
+      console.error(`[voice] account ${index + 1} failed: ${message}`);
     }
   }
 
-  return NextResponse.json({ error: "Could not start a voice session." }, { status: 502, headers: { "Cache-Control": "no-store" } });
+  // Coarse code only. Enough to tell a bad paste from a rejected key without
+  // leaking anything about the credential itself.
+  const code = failures.some((entry) => entry.includes("bad_credential"))
+    ? "bad_credential"
+    : failures.some((entry) => entry.includes("401") || entry.includes("403"))
+      ? "credential_rejected"
+      : "upstream_error";
+
+  return NextResponse.json(
+    { error: "Could not start a voice session.", code, accountsTried: accounts.length - startAt },
+    { status: 502, headers: { "Cache-Control": "no-store" } },
+  );
 }
