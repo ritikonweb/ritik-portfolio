@@ -20,6 +20,11 @@
 .voice-bars i:nth-child(2){animation-delay:.15s}.voice-bars i:nth-child(3){animation-delay:.3s}.voice-bars i:nth-child(4){animation-delay:.45s}
 .voice-cta[data-phase=speaking] .voice-bars i{animation-duration:.55s}
 .voice-status{position:absolute;top:calc(100% - .15rem);left:.3rem;width:max-content;max-width:min(16rem,68vw);overflow:hidden;color:var(--muted);font-size:.75rem;line-height:1.2;white-space:nowrap;text-overflow:ellipsis;pointer-events:none}.voice-status:empty{display:none}
+.voice-cycle{--h:1.15rem;display:inline-block;height:var(--h);overflow:hidden;font-family:var(--font-fragment),ui-monospace,monospace;font-size:.62rem;font-weight:400;letter-spacing:.16em;text-transform:uppercase;opacity:.62}
+.voice-cycle>span{display:block;animation:voice-roll 9s cubic-bezier(.8,0,.2,1) infinite}
+.voice-cycle b{display:flex;align-items:center;height:var(--h);font-weight:400;line-height:1;white-space:nowrap}
+@keyframes voice-roll{0%,26%{transform:translateY(0)}33%,59%{transform:translateY(calc(var(--h) * -1))}66%,92%{transform:translateY(calc(var(--h) * -2))}100%{transform:translateY(calc(var(--h) * -3))}}
+@media (prefers-reduced-motion:reduce){.voice-cycle>span{animation:none}}
 @keyframes voice-bar{0%,100%{height:28%}50%{height:100%}}
 @keyframes voice-breathe{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes menu-in{from{opacity:0;transform:translateY(-.5rem)}to{opacity:1;transform:translateY(0)}}@keyframes portrait-in{from{opacity:0;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}@keyframes reveal-align-in{from{transform:scale(1.025)}to{transform:scale(1)}}@keyframes heading-in{from{opacity:0;transform:translateY(2rem)}to{opacity:1;transform:translateY(0)}}@keyframes rise-in{from{opacity:0;transform:translateY(1.25rem)}to{opacity:1;transform:translateY(0)}}

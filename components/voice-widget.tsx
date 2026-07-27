@@ -64,12 +64,17 @@ const CLOSE_BACKSTOP_MS = 9000;
 const GOODBYE_NOTE = "Thanks for stopping by.";
 
 const LABELS: Record<Phase, string> = {
-  idle: "Let's Talk",
+  idle: "Ask me",
   connecting: "Connecting",
   listening: "Listening",
   thinking: "Thinking",
   speaking: "Speaking",
 };
+
+// Rolls after the idle label. These answer the real reason people do not tap a mic on a
+// personal site, which is not knowing what they are allowed to ask. The last entry repeats
+// the first so the loop has no visible jump.
+const PROMPTS = ["anything", "about my work", "why hire me", "anything"];
 
 const HINTS: Record<Phase, string> = {
   idle: "Ask me anything",
@@ -475,11 +480,22 @@ export default function VoiceWidget() {
 
   return (
     <span className="voice-widget">
-      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Let's talk, start a voice conversation"}>
+      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Ask me anything, start a voice conversation with my AI"}>
         <span className="voice-glyph" aria-hidden="true">
           {phase === "listening" || phase === "speaking" ? <Bars /> : phase === "thinking" ? <StopIcon /> : <MicIcon />}
         </span>
         <span className="voice-label">{LABELS[phase]}</span>
+        {/* Only while idle. Animating during a live call would compete with the phase
+            label, and the aria-label already carries the meaning for screen readers. */}
+        {phase === "idle" ? (
+          <span className="voice-cycle" aria-hidden="true">
+            <span>
+              {PROMPTS.map((prompt, index) => (
+                <b key={`${prompt}-${index}`}>{prompt}</b>
+              ))}
+            </span>
+          </span>
+        ) : null}
       </button>
       <span className="voice-status" role="status" aria-live="polite">{message}</span>
     </span>
