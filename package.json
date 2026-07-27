@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@deepgram/agents": "0.1.1",
     "@vercel/analytics": "^2.0.1",
     "next": "14.2.35",
     "posthog-js": "^1.407.3",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
+import type { AgentMicrophone, AgentPlayer, AgentSession } from "@deepgram/agents";
 
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
@@ -9,37 +10,32 @@ type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 const IDLE_STOP_MS = 15000;
 const MAX_SESSION_MS = 240000;
 
-// Visitor said goodbye. Matched against the finished transcript of a turn, so the bot
-// gets to deliver its sign off first and the session closes after it stops speaking.
-// Deliberately conservative: "thanks" or "ok" alone must not end a conversation.
+// Audio formats. These must match what the server is told, which the SDK handles from
+// the same config object.
+const INPUT_SAMPLE_RATE = 16000;
+const OUTPUT_SAMPLE_RATE = 24000;
+
+// Backstop for the end_conversation function call. The model normally ends the call
+// itself, but a farewell that it fails to act on should still close the session.
 const FAREWELL = new RegExp(
   [
     "\\bbye\\b",
-    "\\bbye bye\\b",
     "\\bgood ?bye\\b",
     "\\bsee you\\b",
-    "\\bsee ya\\b",
     "\\btalk (to you )?later\\b",
-    "\\bcatch you later\\b",
-    "\\bgood night\\b",
     "\\bcut the call\\b",
     "\\bend the call\\b",
     "\\bhang up\\b",
-    "\\bdisconnect\\b",
     "\\bthat(')?s all\\b",
-    "\\bthat(')?s it (for now)?\\b",
-    "\\bnothing else\\b",
     "\\bno more questions\\b",
     "\\bi(')?m done\\b",
     "\\balvida\\b",
     "\\bphir milenge\\b",
-    "\\bchalte hai(n)?\\b",
-    "\\bbas itna\\b",
   ].join("|"),
   "i",
 );
-// Grace period after the bot stops speaking, so the sign off is fully heard.
-const FAREWELL_CLOSE_MS = 900;
+// Grace period so the closing line is heard in full before the socket drops.
+const CLOSE_GRACE_MS = 1200;
 
 const LABELS: Record<Phase, string> = {
   idle: "Let's Talk",
@@ -82,37 +78,38 @@ function Bars() {
   );
 }
 
+type AgentConfig = {
+  token: string;
+  agent: Record<string, unknown>;
+  accountIndex: number;
+  accountCount: number;
+};
+
 export default function VoiceWidget() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const peerRef = useRef<RTCPeerConnection | null>(null);
-  const channelRef = useRef<RTCDataChannel | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const sessionRef = useRef<AgentSession | null>(null);
+  const micRef = useRef<AgentMicrophone | null>(null);
+  const playerRef = useRef<AgentPlayer | null>(null);
   const activeRef = useRef(false);
   const lastActivityRef = useRef(0);
   const startedAtRef = useRef(0);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const failoverRef = useRef<((reason: string) => void) | null>(null);
-  // Set when the visitor says goodbye. The session closes once the bot finishes its
-  // reply rather than cutting it off mid sentence.
-  const closingRef = useRef(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Resends the session config with the first party STT model, used when the configured
-  // one is not enabled on the account.
-  const sttRetryRef = useRef<(() => void) | null>(null);
-  // Running transcript of the conversation, posted once at the end.
+  const closingRef = useRef(false);
+  // Accounts this visitor already found to be out of credit, so a retry skips them.
+  const deadAccounts = useRef<Set<number>>(new Set());
   const transcriptRef = useRef<Array<{ role: "visitor" | "ritik"; text: string }>>([]);
   const startedIsoRef = useRef<string | null>(null);
 
-  // Ships the finished conversation to the server, which stores it. Fire and forget with
-  // keepalive so it still goes out if the visitor closes the tab mid session.
+  // Ships the finished conversation to the server. Fire and forget with keepalive so it
+  // still goes out if the visitor closes the tab mid session.
   const saveTranscript = useCallback(() => {
     const turns = transcriptRef.current;
     transcriptRef.current = [];
     const startedAt = startedIsoRef.current;
     startedIsoRef.current = null;
-    // One-sided or empty conversations are not worth storing.
     if (turns.length < 2) return;
     try {
       void fetch("/api/voice/transcript/", {
@@ -126,41 +123,30 @@ export default function VoiceWidget() {
     }
   }, []);
 
-  // Accounts this visitor has already found to be out of credit. Held for the tab so a
-  // second attempt does not walk into the same dead key again.
-  const deadAccounts = useRef<Set<number>>(new Set());
-
-  const teardown = useCallback((note?: string | null, keepStream = false) => {
+  const teardown = useCallback((note?: string | null) => {
     const wasActive = activeRef.current;
     const sessionDurationMs = wasActive && startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0;
     activeRef.current = false;
     closingRef.current = false;
-    sttRetryRef.current = null;
+
     if (closeTimerRef.current !== null) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
-    saveTranscript();
     if (watchdogRef.current !== null) {
       clearInterval(watchdogRef.current);
       watchdogRef.current = null;
     }
-    channelRef.current?.close();
-    channelRef.current = null;
-    // On a silent failover the microphone track is reused. Releasing and re-requesting it
-    // would need a fresh permission gesture, which Safari refuses outside a click, and it
-    // makes the switch visible to the visitor.
-    if (!keepStream) {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    peerRef.current?.close();
-    peerRef.current = null;
-    if (audioRef.current) {
-      audioRef.current.srcObject = null;
-      audioRef.current.remove();
-      audioRef.current = null;
-    }
+
+    saveTranscript();
+
+    micRef.current?.stop();
+    micRef.current = null;
+    playerRef.current?.dispose();
+    playerRef.current = null;
+    sessionRef.current?.disconnect();
+    sessionRef.current = null;
+
     setPhase("idle");
     if (note !== undefined) setMessage(note);
     if (wasActive && note !== null) {
@@ -184,76 +170,19 @@ export default function VoiceWidget() {
     };
   }, [teardown]);
 
-  const handleEvent = useCallback((raw: string) => {
-    let event: { type?: string; transcript?: string };
-    try {
-      event = JSON.parse(raw) as { type?: string; transcript?: string };
-    } catch {
-      return;
-    }
-    const type = event.type ?? "";
-    // Any real speech or model output counts as activity and resets the idle timer.
-    if (type.startsWith("input_audio_buffer.") || type.startsWith("response.")) lastActivityRef.current = Date.now();
-
-    // Finished transcript of what the visitor said.
-    if (type === "conversation.item.input_audio_transcription.completed") {
-      const said = (event.transcript ?? "").trim();
-      if (said) {
-        transcriptRef.current.push({ role: "visitor", text: said });
-        // Arm the close. The bot still gets to answer, and the persona tells it to sign
-        // off warmly, so the call ends on a sentence rather than a hang up.
-        if (FAREWELL.test(said)) closingRef.current = true;
-      }
-      return;
-    }
-
-    // Finished transcript of what the bot said.
-    if (type === "response.output_audio_transcript.done") {
-      const spoken = (event.transcript ?? "").trim();
-      if (spoken) transcriptRef.current.push({ role: "ritik", text: spoken });
-      return;
-    }
-
-    if (type === "input_audio_buffer.speech_started") {
-      // They started talking again, so they did not actually mean goodbye.
-      if (closingRef.current && closeTimerRef.current === null) closingRef.current = false;
-      setPhase("listening");
-    }
-    else if (type === "input_audio_buffer.speech_stopped" || type === "response.created") setPhase("thinking");
-    else if (type === "response.output_audio.delta" || type === "output_audio_buffer.started") {
-      // Audio arrived, so this account works. Disarm failover from here on, otherwise a
-      // late error would silently open a second paid session the visitor never asked for.
-      failoverRef.current = null;
-      setPhase("speaking");
-    }
-    else if (type === "response.done" || type === "output_audio_buffer.stopped") {
-      if (closingRef.current && activeRef.current && closeTimerRef.current === null) {
-        setPhase("speaking");
-        closeTimerRef.current = setTimeout(() => {
-          closeTimerRef.current = null;
-          teardown("Thanks for stopping by. Tap to talk again any time.");
-        }, FAREWELL_CLOSE_MS);
-        return;
-      }
-      if (activeRef.current) setPhase("listening");
-    } else if (type === "error") {
-      // An unrecognised STT model rejects the whole session.update rather than just that
-      // field, so retry once with the first party model before giving up on the session.
-      const param = (event as { error?: { param?: string } }).error?.param ?? "";
-      if (param.includes("transcription.model") && sttRetryRef.current) {
-        sttRetryRef.current();
-        return;
-      }
-      // Otherwise this often means the account ran out of credit, so try the next one.
-      if (failoverRef.current) failoverRef.current("Voice session ended. Try again.");
-      else teardown("Voice session ended. Try again.");
-    }
+  // Ends the call once the agent has finished its closing line.
+  const closeAfterGoodbye = useCallback(() => {
+    if (closeTimerRef.current !== null) return;
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      teardown("Thanks for stopping by. Tap to talk again any time.");
+    }, CLOSE_GRACE_MS);
   }, [teardown]);
 
   const start = useCallback(async (accountIndex = 0) => {
     setMessage(null);
 
-    if (typeof window === "undefined" || !window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setMessage("This browser can't run live voice. Try latest Chrome or Safari.");
       return;
     }
@@ -261,62 +190,14 @@ export default function VoiceWidget() {
     setPhase("connecting");
     activeRef.current = true;
 
-    // Ask for the mic first, while we are still inside the click gesture.
-    // Safari refuses the permission prompt if an await (like fetch) happens first.
-    // On a silent failover the previous track is still live, so it is reused instead.
-    const liveTrack = streamRef.current?.getAudioTracks().some((track) => track.readyState === "live");
-    try {
-      if (!liveTrack) {
-        streamRef.current = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            // Levels out a quiet or distant speaker, which is half the reason words get
-            // misheard. Mono avoids the browser downmixing for us.
-            autoGainControl: true,
-            channelCount: 1,
-          },
-        });
-      }
-    } catch (error) {
-      const name = (error as DOMException)?.name;
-      if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
-        teardown("No microphone found. Connect one and try again.");
-      } else if (name === "NotReadableError" || name === "TrackStartError") {
-        teardown("Your microphone is in use by another app.");
-      } else if (name === "SecurityError" || !window.isSecureContext) {
-        teardown("Voice needs a secure https connection.");
-      } else {
-        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
-      }
-      return;
-    }
-
-    let config: {
-      token: string;
-      callsUrl: string;
-      iceServers: RTCIceServer[];
-      model: string;
-      ttsModel: string;
-      ttsSpeed: number;
-      sttModel: string;
-      languageHints: string[];
-      segmenter: string;
-      voice: string;
-      instructions: string;
-      accountIndex: number;
-      accountCount: number;
-    };
+    let config: AgentConfig;
+    const skip = Array.from(deadAccounts.current).join(",");
+    const url = `/api/voice/agent/?account=${accountIndex}${skip ? `&skip=${skip}` : ""}`;
 
     try {
-      const skip = Array.from(deadAccounts.current).join(",");
-      const response = await fetch(
-        `/api/voice/session/?account=${accountIndex}${skip ? `&skip=${skip}` : ""}`,
-        { cache: "no-store" },
-      );
+      const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string; accountsTried?: number };
-        // Visitors see a plain message; the diagnostic detail goes to the console only.
         console.error("[voice] session request failed", {
           status: response.status,
           code: body.code ?? null,
@@ -325,51 +206,120 @@ export default function VoiceWidget() {
         teardown(body.error || "Voice isn't available right now.");
         return;
       }
-      config = await response.json();
+      config = (await response.json()) as AgentConfig;
     } catch {
       teardown("Network problem. Check your connection and try again.");
       return;
     }
 
-    // If this account fails, silently move to the next configured one.
+    // Loaded on demand so the SDK is not in the initial page bundle.
+    const { AgentSession, AgentMicrophone, AgentPlayer } = await import("@deepgram/agents");
+
     const hasSpare = config.accountIndex + 1 < config.accountCount;
-    failoverRef.current = (reason: string) => {
-      failoverRef.current = null;
+    const failover = (reason: string) => {
       if (!hasSpare) {
         teardown(reason);
         return;
       }
-      // Keep the microphone open so the switch is invisible to the visitor and no second
-      // permission gesture is needed.
-      teardown(null, true);
+      // The visitor should not notice the switch, so no message and straight back to
+      // connecting on the next key.
+      teardown(null);
       setPhase("connecting");
       void start(config.accountIndex + 1);
     };
 
     try {
-      const peer = new RTCPeerConnection({ iceServers: config.iceServers ?? [] });
-      peerRef.current = peer;
+      const player = new AgentPlayer({ sampleRate: OUTPUT_SAMPLE_RATE });
+      playerRef.current = player;
 
-      peer.oniceconnectionstatechange = () => {
-        if (activeRef.current && (peer.iceConnectionState === "failed" || peer.iceConnectionState === "disconnected")) {
-          teardown("Connection dropped. Try again.");
+      const session = new AgentSession({
+        auth: {
+          // Called again before every reconnect, so each attempt gets a fresh token.
+          tokenFactory: async () => {
+            const res = await fetch(url, { cache: "no-store" });
+            if (!res.ok) throw new Error(`token request failed (${res.status})`);
+            const next = (await res.json()) as AgentConfig;
+            return next.token;
+          },
+        },
+        agent: config.agent as never,
+        audio: {
+          input: { encoding: "linear16", sampleRate: INPUT_SAMPLE_RATE },
+          output: { encoding: "linear16", sampleRate: OUTPUT_SAMPLE_RATE },
+        },
+        keepAliveInterval: 8000,
+        reconnect: { enabled: true, maxAttempts: 3, baseDelay: 400 },
+      });
+      sessionRef.current = session;
+
+      session.on("audio", (chunk) => player.queue(chunk));
+
+      session.on("user-started-speaking", () => {
+        // Barge-in: drop whatever is still queued so the agent stops mid sentence.
+        player.interrupt();
+        lastActivityRef.current = Date.now();
+        // They kept talking, so they did not actually mean goodbye.
+        if (closingRef.current && closeTimerRef.current === null) closingRef.current = false;
+        if (activeRef.current) setPhase("listening");
+      });
+
+      session.on("agent-thinking", () => {
+        lastActivityRef.current = Date.now();
+        if (activeRef.current) setPhase("thinking");
+      });
+
+      session.on("agent-started-speaking", () => {
+        lastActivityRef.current = Date.now();
+        if (activeRef.current) setPhase("speaking");
+      });
+
+      session.on("agent-audio-done", () => {
+        lastActivityRef.current = Date.now();
+        if (closingRef.current && activeRef.current) {
+          closeAfterGoodbye();
+          return;
         }
-      };
+        if (activeRef.current) setPhase("listening");
+      });
 
-      peer.ontrack = (event) => {
-        const audio = document.createElement("audio");
-        audio.autoplay = true;
-        audio.srcObject = new MediaStream([event.track]);
-        audio.style.display = "none";
-        document.body.appendChild(audio);
-        audioRef.current = audio;
-        void audio.play().catch(() => setMessage("Tap the button once more to allow audio."));
-      };
+      session.on("conversation-text", (msg) => {
+        const said = String((msg as { content?: string }).content ?? "").trim();
+        const role = (msg as { role?: string }).role;
+        if (!said) return;
+        lastActivityRef.current = Date.now();
+        transcriptRef.current.push({ role: role === "assistant" ? "ritik" : "visitor", text: said });
+        if (role !== "assistant" && FAREWELL.test(said)) closingRef.current = true;
+      });
 
-      const channel = peer.createDataChannel("oai-events", { ordered: true });
-      channelRef.current = channel;
-      channel.onmessage = (event) => handleEvent(String(event.data));
-      channel.onopen = () => {
+      // The agent decides when the conversation is over and calls this.
+      session.on("function-call-request", (msg) => {
+        const functions = (msg as { functions?: Array<{ id?: string; name?: string }> }).functions ?? [];
+        for (const fn of functions) {
+          const name = fn.name ?? "";
+          session.sendFunctionCallResponse(fn.id, name, JSON.stringify({ ok: true }));
+          if (name === "end_conversation") closingRef.current = true;
+        }
+      });
+
+      session.on("error", (msg) => {
+        console.error("[voice] agent error", msg);
+        failover("Voice session ended. Try again.");
+      });
+
+      session.on("sdk-error", (err) => {
+        console.error("[voice] sdk error", err);
+        const detail = String(err?.message ?? "");
+        // 402 or a quota-shaped failure means this key is spent, so mark it and move on.
+        if (/402|payment|credit|quota|balance/i.test(detail)) {
+          deadAccounts.current.add(config.accountIndex);
+          failover("Voice is out of credit right now. Try again later.");
+          return;
+        }
+        failover("Couldn't start the conversation. Try again.");
+      });
+
+      session.on("settings-applied", () => {
+        if (!activeRef.current) return;
         setPhase("listening");
         // Transcripts are stored, so say so. Delete this line if you drop transcripts.
         setMessage("Connected. This conversation is transcribed.");
@@ -378,6 +328,7 @@ export default function VoiceWidget() {
         startedIsoRef.current = new Date().toISOString();
         transcriptRef.current = [];
         posthog.capture("voice_session_started");
+
         watchdogRef.current = setInterval(() => {
           if (!activeRef.current) return;
           const now = Date.now();
@@ -387,166 +338,42 @@ export default function VoiceWidget() {
             teardown("Session ended. Tap to start a new one.");
           }
         }, 1000);
-        // Built as a function so it can be resent with a different STT model if the
-        // configured one is not enabled on the account. Inworld rejects the whole
-        // session.update when the model is unrecognised, so without this a bad STT
-        // model would take the entire session down.
-        const sendSessionUpdate = (sttModel: string, hints: string[]) => {
-          channelRef.current?.send(
-          JSON.stringify({
-            type: "session.update",
-            session: {
-              type: "realtime",
-              model: config.model,
-              instructions: config.instructions,
-              output_modalities: ["audio", "text"],
-              // Two or three sentences is the target, so a lower ceiling shortens the
-              // tail of every reply and cuts token spend at the same time.
-              max_output_tokens: 180,
-              // Warmer, less deterministic phrasing so answers do not sound recited.
-              temperature: 0.9,
-              audio: {
-                input: {
-                  transcription: { model: sttModel },
-                  // "low" eagerness tolerates the pauses people leave mid sentence
-                  // instead of ending the turn on them.
-                  turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
-                },
-                output: { model: config.ttsModel, voice: config.voice, speed: config.ttsSpeed },
-              },
-              providerData: {
-                stt: {
-                  // Names the model would otherwise mishear, plus explicit overrides of
-                  // the eagerness preset.
-                  prompt: "Conversation with Ritik Yadav, in Indian English and sometimes Hindi. Names: Flow Realty, Rustomjee, Keystone Realtors, Ozonetel, Gallabox, Double Tick, Zoho, Salesforce, InterVuex, BrowseMind, Aura Meetings, DeepFilterNet, NLSIU, IIT Ropar, IIM Amritsar, Flipkart, SysMind, Bangalore, crore, lakh.",
-                  // Biases recognition toward Indian English and Hindi without locking
-                  // to one language. Soniox only, ignored by other backends.
-                  language_hints: hints,
-                  // Documented default is 0.5. Pushing this up rejects noise but also
-                  // swallows the first word of normal speech, which reads as the bot
-                  // mishearing you. 0.55 is a light touch either side.
-                  vad_threshold: 0.55,
-                  // Strong end-of-turn confidence so a half sentence is not sent to the
-                  // model as a complete thought.
-                  end_of_turn_confidence_threshold: 0.85,
-                  // Long enough not to clip a mid sentence pause, short enough that the
-                  // reply does not feel delayed.
-                  min_end_of_turn_silence: 400,
-                  max_turn_silence: 3200,
-                },
-                tts: {
-                  // CREATIVE is the expressive preset. The segmenter is configurable
-                  // because it trades intonation quality against time to first audio.
-                  delivery_mode: "CREATIVE",
-                  segmenter_strategy: config.segmenter,
-                  steering_handling: "emit_once",
-                },
-                // Short "mm-hm" while the visitor is still talking, which is most of what
-                // makes a listener feel human. Quiet and capped so it never talks over.
-                backchannel: { enabled: true, volume_gain: 0.5, max_per_turn: 2, min_gap_ms: 5000, min_speech_ms: 1200 },
-                // Speaks a short filler if the model is slow, instead of dead air. Firing
-                // it earlier is the cheapest way to cut *perceived* latency, since the
-                // gap gets filled while the real answer is still being generated.
-                responsiveness: { enabled: true, max_initial_per_turn: 1, initial_wait_timeout_ms: 700 },
-              },
-            },
-          }),
-          );
-        };
-
-        // Exposed so the error handler can retry with the first party STT model if the
-        // configured one is not available on this account.
-        sttRetryRef.current = () => {
-          sttRetryRef.current = null;
-          console.warn("[voice] STT model rejected, falling back to inworld/inworld-stt-1");
-          sendSessionUpdate("inworld/inworld-stt-1", []);
-        };
-
-        sendSessionUpdate(config.sttModel, config.languageHints);
-        channel.send(
-          JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "message", role: "user", content: [{ type: "input_text", text: "Greet them briefly and warmly, introduce yourself by name in a few words, and invite their question. One sentence, no questions about them." }] },
-          }),
-        );
-        channel.send(JSON.stringify({ type: "response.create" }));
-      };
-
-      const micStream = streamRef.current;
-      if (!micStream) {
-        teardown("Microphone stopped unexpectedly. Try again.");
-        return;
-      }
-      micStream.getAudioTracks().forEach((track) => peer.addTrack(track, micStream));
-
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      // Wait for ICE candidates. We do not need the long tail of them, but we do need at
-      // least one, because an offer with no candidates gets rejected. On a mobile network
-      // the first candidate can take over a second, so the early exit requires a
-      // candidate to have arrived and the hard ceiling stays generous.
-      await new Promise<void>((resolve) => {
-        if (peer.iceGatheringState === "complete") return resolve();
-        let settled = false;
-        let sawCandidate = false;
-        let debounce: ReturnType<typeof setTimeout> | null = null;
-        const done = () => {
-          if (settled) return;
-          settled = true;
-          if (debounce !== null) clearTimeout(debounce);
-          clearTimeout(ceiling);
-          resolve();
-        };
-        peer.onicecandidate = (event) => {
-          if (!event.candidate) return done();
-          sawCandidate = true;
-          if (debounce !== null) clearTimeout(debounce);
-          debounce = setTimeout(done, 300);
-        };
-        peer.onicegatheringstatechange = () => { if (peer.iceGatheringState === "complete") done(); };
-        const ceiling = setTimeout(() => {
-          if (!sawCandidate) console.warn("[voice] no ICE candidates gathered before timeout");
-          done();
-        }, 3000);
       });
 
-      const answer = await fetch(config.callsUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp", Authorization: `Bearer ${config.token}` },
-        body: peer.localDescription?.sdp ?? "",
+      await session.connect();
+
+      const mic = new AgentMicrophone((data) => session.sendAudio(data), {
+        sampleRate: INPUT_SAMPLE_RATE,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       });
-      if (!answer.ok) {
-        // The status and body are the only way to tell an exhausted account from a
-        // malformed offer, so surface them in the console rather than discarding them.
-        const detail = await answer.text().catch(() => "");
-        console.error("[voice] call rejected", {
-          status: answer.status,
-          account: config.accountIndex + 1,
-          of: config.accountCount,
-          detail: detail.slice(0, 500),
-        });
-        const outOfCredit = answer.status === 402 || answer.status === 429 || /quota|credit|billing|balance/i.test(detail);
-        // Remember the dead account so the next attempt in this tab skips it outright.
-        if (outOfCredit) deadAccounts.current.add(config.accountIndex);
-        failoverRef.current?.(
-          outOfCredit
-            ? "Voice is out of credit right now. Try again later."
-            : "Voice service didn't accept the call. Try again.",
-        );
-        return;
+      micRef.current = mic;
+      mic.on("error", (err) => {
+        console.error("[voice] microphone error", err);
+        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
+      });
+      await mic.start();
+    } catch (error) {
+      const name = (error as DOMException)?.name;
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        teardown("No microphone found. Connect one and try again.");
+      } else if (name === "NotReadableError" || name === "TrackStartError") {
+        teardown("Your microphone is in use by another app.");
+      } else if (!window.isSecureContext) {
+        teardown("Voice needs a secure https connection.");
+      } else {
+        console.error("[voice] start failed", error);
+        teardown("Couldn't start the conversation. Try again.");
       }
-      await peer.setRemoteDescription({ type: "answer", sdp: await answer.text() });
-    } catch {
-      teardown("Couldn't start the conversation. Try again.");
     }
-  }, [handleEvent, teardown]);
+  }, [closeAfterGoodbye, teardown]);
 
   const toggle = useCallback(() => {
     if (phase === "idle") void start(0);
-    else {
-      failoverRef.current = null;
-      teardown(null);
-    }
+    else teardown(null);
   }, [phase, start, teardown]);
 
   const busy = phase !== "idle";
