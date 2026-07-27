@@ -24,11 +24,12 @@ knows and how it speaks. It is read server-side on each voice session request.
 | `OAUTH_GITHUB_CLIENT_SECRET` | for CMS login | GitHub OAuth app client secret |
 | `DEEPGRAM_API_KEY` | for voice bot | Deepgram API key, Member permission or higher |
 | `DEEPGRAM_API_KEY_2` … `_n` | optional | Fallback keys, used automatically if the one before is refused. Any number, discovered from the environment |
-| `DEEPGRAM_TTS_VOICE_ID` | optional | Cartesia voice id. Setting this switches TTS to Cartesia, which is Deepgram-managed and billed to the same credit |
-| `DEEPGRAM_TTS_MODEL_ID` | optional | Cartesia model, defaults to `sonic-2` |
-| `DEEPGRAM_TTS_MODEL` | optional | Aura voice used when no Cartesia voice id is set. Defaults to `aura-2-arcas-en` |
-| `DEEPGRAM_TTS_PROVIDER` | optional | `deepgram` or `cartesia`. Inferred from whether a voice id is present |
-| `DEEPGRAM_TTS_SPEED` | optional | Aura accepts 0.7 to 1.5 (default 1.1). Cartesia accepts `slowest`…`fastest` (default `normal`) |
+| `DEEPGRAM_TTS_VOICE_ID` | optional | Cartesia voice id. Defaults to the configured voice in the route |
+| `DEEPGRAM_TTS_MODEL_ID` | optional | Cartesia model, defaults to `sonic-3` (expressive, honours the SSML tags) |
+| `DEEPGRAM_TTS_PROVIDER` | optional | `cartesia` (default) or `deepgram` |
+| `DEEPGRAM_TTS_MODEL` | optional | Aura voice used only when the provider is `deepgram`. Defaults to `aura-2-arcas-en` |
+| `DEEPGRAM_TTS_SPEED` | optional | Cartesia multiplier 0.6 to 1.5, defaults to `1.08`. Aura accepts 0.7 to 1.5 |
+| `DEEPGRAM_EAGER_EOT_THRESHOLD` | optional | Eager end-of-turn confidence, 0.3 to 0.9. Defaults to `0.6`. Lower is snappier but costs more LLM calls |
 | `DEEPGRAM_STT_MODEL` | optional | Defaults to `flux-general-multi`, the only model honouring language hints |
 | `DEEPGRAM_LANGUAGE_HINTS` | optional | Comma separated, defaults to `en,hi` |
 | `DEEPGRAM_EOT_THRESHOLD` | optional | Flux end-of-turn confidence, 0.5 to 0.9. Defaults to `0.8` |

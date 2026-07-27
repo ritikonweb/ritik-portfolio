@@ -16,17 +16,22 @@ const DEFAULT_LANGUAGE_HINTS = "en,hi";
 // Higher means the turn only ends when Flux is confident the speaker finished, which
 // stops half sentences reaching the model. Valid range is 0.5 to 0.9.
 const DEFAULT_EOT_THRESHOLD = 0.8;
+const DEFAULT_EAGER_EOT = 0.6;
 const DEFAULT_EOT_TIMEOUT_MS = 4000;
 
 const DEFAULT_LLM_PROVIDER = "open_ai";
 const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 const DEFAULT_TEMPERATURE = 0.8;
 
-// Aura-2 is billed against the Deepgram credit, so it is the safe default. Set
-// DEEPGRAM_TTS_VOICE_ID to a Cartesia voice id to switch to Cartesia, which is also
-// Deepgram-managed and therefore still covered by the same credit.
+// Cartesia is Deepgram-managed, so it bills against the same credit as everything else.
+// sonic-3 is the model that added expressive delivery and honours the speed, volume,
+// break and emotion tags, which is what stops the voice sounding synthetic.
+const DEFAULT_CARTESIA_MODEL_ID = "sonic-3";
+const DEFAULT_CARTESIA_VOICE_ID = "726d5ae5-055f-4c3d-8355-d9677de68937";
+// Slightly above natural. Sonic accepts 0.6 to 1.5 as a multiplier.
+const DEFAULT_CARTESIA_SPEED = 1.08;
+// Only used if the Cartesia voice is explicitly disabled.
 const DEFAULT_TTS_MODEL = "aura-2-arcas-en";
-const DEFAULT_CARTESIA_MODEL_ID = "sonic-2";
 
 // Deepgram's managed LLM prompt ceiling.
 const MAX_PROMPT_CHARS = 25000;
@@ -39,7 +44,8 @@ const KEYTERMS = [
   "Bangalore", "crore", "lakh", "Chief of Staff",
 ];
 
-const GREETING = "Hi, I'm Ritik. Ask me anything about my work.";
+// Written the way a person actually answers, not the way a product announces itself.
+const GREETING = "Hey, Ritik here. So, what would you like to know?";
 
 type Account = { key: string };
 
@@ -102,18 +108,19 @@ async function readPersona(): Promise<string> {
   }
 }
 
-/** Builds the TTS block. Cartesia when a voice id is configured, Aura-2 otherwise. */
+/** Builds the TTS block. Cartesia by default, Aura-2 only if Cartesia is turned off. */
 function buildSpeak() {
-  const voiceId = (process.env.DEEPGRAM_TTS_VOICE_ID || "").trim();
-  const provider = (process.env.DEEPGRAM_TTS_PROVIDER || (voiceId ? "cartesia" : "deepgram")).trim();
+  const voiceId = (process.env.DEEPGRAM_TTS_VOICE_ID || DEFAULT_CARTESIA_VOICE_ID).trim();
+  const provider = (process.env.DEEPGRAM_TTS_PROVIDER || "cartesia").trim();
 
   if (provider === "cartesia" && voiceId) {
+    const requested = Number(process.env.DEEPGRAM_TTS_SPEED);
     return {
       provider: {
         type: "cartesia",
         model_id: (process.env.DEEPGRAM_TTS_MODEL_ID || DEFAULT_CARTESIA_MODEL_ID).trim(),
         voice: { mode: "id", id: voiceId },
-        speed: (process.env.DEEPGRAM_TTS_SPEED || "normal").trim(),
+        speed: Number.isFinite(requested) && requested >= 0.6 && requested <= 1.5 ? requested : DEFAULT_CARTESIA_SPEED,
         language: "en",
       },
     };
@@ -148,6 +155,11 @@ function buildAgentSettings(prompt: string) {
           .filter(Boolean),
         keyterms: KEYTERMS,
         eot_threshold: clamp(Number(process.env.DEEPGRAM_EOT_THRESHOLD), 0.5, 0.9, DEFAULT_EOT_THRESHOLD),
+        // Lets the model start forming a reply before the visitor has completely
+        // finished, which is most of what makes a real conversation feel responsive
+        // instead of walkie-talkie. Costs a few extra LLM calls. Must stay at or below
+        // eot_threshold.
+        eager_eot_threshold: clamp(Number(process.env.DEEPGRAM_EAGER_EOT_THRESHOLD), 0.3, 0.9, DEFAULT_EAGER_EOT),
         eot_timeout_ms: clamp(Number(process.env.DEEPGRAM_EOT_TIMEOUT_MS), 1000, 10000, DEFAULT_EOT_TIMEOUT_MS),
       },
     },
