@@ -34,13 +34,34 @@ const FAREWELL = new RegExp(
   ].join("|"),
   "i",
 );
+// The agent's own sign off is an independent signal that the call is over, and it works
+// even if the visitor's transcript never arrives.
+const AGENT_FAREWELL = new RegExp(
+  [
+    "thank you for your time",
+    "thanks for your time",
+    "good talking to you",
+    "great talking to you",
+    "good to talk to you",
+    "nice talking to you",
+    "appreciate you stopping by",
+    "thanks for stopping by",
+    "thanks for listening",
+    "take care",
+    "have a good (day|one|evening)",
+    "all the best",
+  ].join("|"),
+  "i",
+);
 // After a goodbye, wait at least this long so the agent can start its sign off, then
 // close as soon as playback has drained.
-const CLOSE_MIN_MS = 2200;
+const CLOSE_MIN_MS = 1500;
 // Absolute backstop. The session never stays open longer than this after a goodbye,
 // even if no closing audio ever arrives.
 const CLOSE_BACKSTOP_MS = 9000;
-const GOODBYE_NOTE = "Thanks for stopping by. Tap to talk again any time.";
+// Status strings are kept short on purpose: the line sits under the hero buttons and is
+// pinned to a single line, so anything long gets clipped rather than wrapping.
+const GOODBYE_NOTE = "Thanks for stopping by.";
 
 const LABELS: Record<Phase, string> = {
   idle: "Let's Talk",
@@ -201,7 +222,7 @@ export default function VoiceWidget() {
     setMessage(null);
 
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setMessage("This browser can't run live voice. Try latest Chrome or Safari.");
+      setMessage("Try latest Chrome or Safari.");
       return;
     }
 
@@ -229,7 +250,7 @@ export default function VoiceWidget() {
       }
       config = (await response.json()) as AgentConfig;
     } catch {
-      teardown("Network problem. Check your connection and try again.");
+      teardown("Network problem. Try again.");
       return;
     }
 
@@ -268,9 +289,9 @@ export default function VoiceWidget() {
         }
 
         if (now - lastActivityRef.current >= IDLE_STOP_MS) {
-          teardown("Paused after a quiet moment. Tap to talk again.");
+          teardown("Paused. Tap to talk again.");
         } else if (now - startedAtRef.current >= MAX_SESSION_MS) {
-          teardown("Session ended. Tap to start a new one.");
+          teardown("Session ended.");
         }
       }, 500);
     };
@@ -327,10 +348,19 @@ export default function VoiceWidget() {
         const said = String((msg as { content?: string }).content ?? "").trim();
         const role = (msg as { role?: string }).role;
         if (!said) return;
+        // Logged so it is obvious which roles actually arrive, which is the one thing
+        // needed to tell a missed farewell from a missing transcript event.
+        console.info(`[voice] ${role ?? "unknown"}: ${said.slice(0, 120)}`);
         lastActivityRef.current = Date.now();
         const isAgent = role === "assistant";
         transcriptRef.current.push({ role: isAgent ? "ritik" : "visitor", text: said });
-        if (isAgent) return;
+
+        if (isAgent) {
+          // If it just delivered a sign off, the conversation is over regardless of
+          // whether the function call or the visitor's transcript reached us.
+          if (AGENT_FAREWELL.test(said)) armClose("agent sign off");
+          return;
+        }
 
         if (FAREWELL.test(said)) {
           armClose("transcript");
@@ -355,7 +385,7 @@ export default function VoiceWidget() {
 
       session.on("error", (msg) => {
         console.error("[voice] agent error", msg);
-        failover("Voice session ended. Try again.");
+        failover("Session ended. Try again.");
       });
 
       session.on("warning", (msg) => console.warn("[voice] agent warning", msg));
@@ -364,7 +394,7 @@ export default function VoiceWidget() {
         console.info(`[voice] disconnected: ${reason}`);
         // The SDK gives up after its reconnect attempts, so make sure the UI does not sit
         // on "Listening" with a dead socket behind it.
-        if (activeRef.current && !closingRef.current) teardown("Connection dropped. Tap to talk again.");
+        if (activeRef.current && !closingRef.current) teardown("Connection dropped.");
       });
 
       session.on("sdk-error", (err) => {
@@ -373,17 +403,17 @@ export default function VoiceWidget() {
         // 402 or a quota-shaped failure means this key is spent, so mark it and move on.
         if (/402|payment|credit|quota|balance/i.test(detail)) {
           deadAccounts.current.add(config.accountIndex);
-          failover("Voice is out of credit right now. Try again later.");
+          failover("Out of credit. Try again later.");
           return;
         }
-        failover("Couldn't start the conversation. Try again.");
+        failover("Couldn't connect. Try again.");
       });
 
       session.on("settings-applied", () => {
         if (!activeRef.current) return;
         console.info("[voice] settings applied, agent ready");
         setPhase("listening");
-        setMessage("Connected. This chat is transcribed.");
+        setMessage("Connected. Chat is transcribed.");
       });
 
       await session.connect();
@@ -407,22 +437,22 @@ export default function VoiceWidget() {
       micRef.current = mic;
       mic.on("error", (err) => {
         console.error("[voice] microphone error", err);
-        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
+        teardown("Mic blocked. Allow it in site settings.");
       });
       await mic.start();
     } catch (error) {
       const name = (error as DOMException)?.name;
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-        teardown("Microphone access was blocked. Allow it in your browser's site settings, then try again.");
+        teardown("Mic blocked. Allow it in site settings.");
       } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-        teardown("No microphone found. Connect one and try again.");
+        teardown("No microphone found.");
       } else if (name === "NotReadableError" || name === "TrackStartError") {
-        teardown("Your microphone is in use by another app.");
+        teardown("Mic in use by another app.");
       } else if (!window.isSecureContext) {
-        teardown("Voice needs a secure https connection.");
+        teardown("Voice needs a secure connection.");
       } else {
         console.error("[voice] start failed", error);
-        teardown("Couldn't start the conversation. Try again.");
+        teardown("Couldn't connect. Try again.");
       }
     }
   }, [armClose, cancelClose, teardown]);

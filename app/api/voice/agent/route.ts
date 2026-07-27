@@ -244,7 +244,7 @@ export async function GET(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (rateLimited(ip)) {
     await captureServerEvent(ip, "voice_api_rate_limited");
-    return NextResponse.json({ error: "Too many voice sessions. Try again in a few minutes." }, { status: 429, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ error: "Too many sessions. Try again later." }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
   const params = new URL(request.url).searchParams;
