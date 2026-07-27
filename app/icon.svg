@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Ritik Yadav">
+  <!-- The R is drawn as a path rather than text so it renders identically everywhere.
+       A favicon cannot rely on a webfont being available. -->
+  <rect width="64" height="64" rx="14" fill="#091a2b"/>
+  <path
+    fill="#edf1f8"
+    fill-rule="evenodd"
+    d="M16 11h20.5c9.6 0 15.5 5.2 15.5 13.1 0 5.7-3.2 10-8.7 12.1L55 53H41.8L32.4 38.2H27V53H16Zm11 8.6v10.4h8.8c3.7 0 5.9-2 5.9-5.2 0-3.2-2.2-5.2-5.9-5.2Z"
+  />
+</svg>
