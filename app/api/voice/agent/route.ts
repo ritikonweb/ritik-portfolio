@@ -80,19 +80,35 @@ function loadAccounts(): Account[] {
  * Default TTL is 30 seconds, which only has to cover the WebSocket handshake, but a
  * slow mobile connection benefits from a little more headroom.
  */
+class MintError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 async function mintToken(apiKey: string): Promise<string> {
-  const response = await fetch(`https://${DEEPGRAM_HOST}/v1/auth/grant`, {
-    method: "POST",
-    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ ttl_seconds: 120 }),
-    cache: "no-store",
-  });
+  const attempt = async (body?: string) => {
+    const headers: Record<string, string> = { Authorization: `Token ${apiKey}` };
+    if (body) headers["Content-Type"] = "application/json";
+    return fetch(`https://${DEEPGRAM_HOST}/v1/auth/grant`, {
+      method: "POST",
+      headers,
+      ...(body ? { body } : {}),
+      cache: "no-store",
+    });
+  };
+
+  // A longer TTL is only for comfort on slow connections. If the account or plan
+  // rejects the request body, fall back to the documented bare request.
+  let response = await attempt(JSON.stringify({ ttl_seconds: 120 }));
+  if (response.status === 400 || response.status === 422) response = await attempt();
+
   if (!response.ok) {
     const detail = (await response.text().catch(() => "")).slice(0, 300);
-    throw new Error(`token_request_failed: ${response.status} ${detail}`);
+    throw new MintError(response.status, `token_request_failed: ${response.status} ${detail}`);
   }
   const payload = (await response.json()) as { access_token?: string };
-  if (!payload.access_token) throw new Error("token_request_failed: response had no access_token");
+  if (!payload.access_token) throw new MintError(200, "token_request_failed: response had no access_token");
   return payload.access_token;
 }
 
@@ -237,6 +253,7 @@ export async function GET(request: Request) {
 
   const prompt = await readPersona();
   const failures: string[] = [];
+  const statuses: number[] = [];
 
   for (let index = startAt; index < accounts.length; index += 1) {
     if (skip.has(index)) continue;
@@ -255,19 +272,27 @@ export async function GET(request: Request) {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof MintError) statuses.push(error.status);
       failures.push(`account ${index + 1}/${accounts.length}: ${message}`);
       console.error(`[voice] account ${index + 1} failed: ${message}`);
     }
   }
 
-  const code = failures.some((entry) => entry.includes("401") || entry.includes("403"))
+  const code = statuses.some((status) => status === 401 || status === 403)
     ? "credential_rejected"
-    : failures.some((entry) => entry.includes("402"))
+    : statuses.includes(402)
       ? "out_of_credit"
       : "upstream_error";
 
   return NextResponse.json(
-    { error: "Could not start a voice session.", code, accountsTried: accounts.length - startAt },
+    {
+      error: "Could not start a voice session.",
+      code,
+      // Upstream status codes only. Safe to expose and it is the one thing needed to
+      // diagnose this without reading the hosting logs.
+      upstreamStatus: statuses,
+      accountsTried: accounts.length - startAt,
+    },
     { status: 502, headers: { "Cache-Control": "no-store" } },
   );
 }
