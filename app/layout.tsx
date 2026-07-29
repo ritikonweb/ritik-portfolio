@@ -8,7 +8,12 @@ import "./globals.css";
 const albert = Albert_Sans({ subsets: ["latin"], variable: "--font-albert", display: "swap" });
 const fragment = Fragment_Mono({ weight: "400", subsets: ["latin"], variable: "--font-fragment", display: "swap" });
 
-const ogImage = { url: "/images/Base_image_desktop.png", width: 1672, height: 941, alt: `${site.identity.name}, ${site.identity.location}` };
+// 1200x630 is the ratio LinkedIn, WhatsApp and X all expect, and 43 KB fetches fast enough
+// that no scraper gives up and renders a preview with no image. Regenerate with
+// scripts/make-og.mjs after changing the hero. The full resolution hero is still used for
+// the Person schema image, where file size does not matter.
+const ogImage = { url: "/images/og-cover.jpg", width: 1200, height: 630, alt: `${site.identity.name}, ${site.identity.location}` };
+const portrait = "/images/Base_image_desktop.png";
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.metadata.siteUrl),
@@ -42,7 +47,7 @@ const personSchema = {
   "@id": `${site.metadata.siteUrl}/#person`,
   name: site.identity.name,
   url: site.metadata.siteUrl,
-  image: `${site.metadata.siteUrl}${ogImage.url}`,
+  image: `${site.metadata.siteUrl}${portrait}`,
   email: `mailto:${site.contact.email}`,
   telephone: `+91${site.contact.phone}`,
   jobTitle: "Program Management, Strategy and Business Operations",
