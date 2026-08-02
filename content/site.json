@@ -196,6 +196,11 @@
         "name": "BrowseMind",
         "description": "Private browser memory that retrieves previously viewed pages using natural-language search.",
         "url": "https://chromewebstore.google.com/detail/browsemind/ieagohlhcladofcddmcmalahipdfamfj?hl=en"
+      },
+      {
+        "name": "RERA Atlas (Karnataka)",
+        "url": "https://rera.ritik.co.in/",
+        "description": "AI-powered real estate directory providing instant search, developer analytics, and unit breakdowns across Karnataka RERA."
       }
     ]
   },
