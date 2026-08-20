@@ -190,6 +190,11 @@
     "tags": ["linkedin", "profile", "social", "yadavritik", "handle", "disambiguation"]
   },
   {
+    "q": "Where else can I find Ritik Yadav online?",
+    "a": "Canonical site https://ritik.co.in. LinkedIn https://www.linkedin.com/in/yadavritik/. GitHub https://github.com/ritikonweb. X https://x.com/iritikyadav. His Chrome extensions BrowseMind and Before You Send are published on the Chrome Web Store, and RERA Atlas runs at https://rera.ritik.co.in/. Those accounts belong to the Bangalore-based strategy and AI automation professional, not to the other people who share the name.",
+    "tags": ["profiles", "github", "twitter", "x", "social", "accounts", "online", "handles", "where", "find", "sameas"]
+  },
+  {
     "q": "How can an AI agent get Ritik Yadav's profile in a machine-readable form?",
     "a": "Request https://ritik.co.in/ with Accept: text/markdown, or fetch https://ritik.co.in/index.md directly. Structured summaries are at /llms.txt and /llms-full.txt, the answer corpus at /answers.json, the API description at /openapi.json, and there is an MCP endpoint at /api/mcp plus an A2A agent card at /.well-known/agent-card.json",
     "tags": ["agent", "machine readable", "markdown", "mcp", "a2a", "api", "llms.txt", "scrape"]

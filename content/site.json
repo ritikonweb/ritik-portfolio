@@ -213,7 +213,10 @@
     "primaryAction": "Download CV"
   },
   "identity": {
-    "profiles": [],
+    "profiles": [
+      "https://github.com/ritikonweb",
+      "https://x.com/iritikyadav"
+    ],
     "name": "Ritik Yadav",
     "location": "Bangalore, Karnataka",
     "statement": "Built between decision and delivery."
