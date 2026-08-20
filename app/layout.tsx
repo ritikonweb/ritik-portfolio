@@ -51,6 +51,24 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#e7f4fb" };
 
+/**
+ * Search engines match alumniOf against institutions they already know about, so each
+ * school needs its own node under the name it is registered under.
+ *
+ * The M.Sc. is a joint degree, and site.json stores it the way a human should read it:
+ * "IIT Ropar and IIM Amritsar". Emitted verbatim that became one CollegeOrUniversity
+ * named after an institution that does not exist, matching nothing. The lookahead keeps
+ * the split narrow so a school whose real name contains "and" is left alone.
+ */
+const INSTITUTIONS: Record<string, string> = {
+  "IIT Ropar": "Indian Institute of Technology Ropar",
+  "IIM Amritsar": "Indian Institute of Management Amritsar",
+};
+
+const alumniOf = site.education.items
+  .flatMap((item) => item.institution.split(/\s+and\s+(?=IIT|IIM)/))
+  .map((name) => ({ "@type": "CollegeOrUniversity", name: INSTITUTIONS[name] ?? name }));
+
 const personSchema = {
   "@type": "Person",
   "@id": `${site.metadata.siteUrl}/#person`,
@@ -63,7 +81,7 @@ const personSchema = {
   description: site.metadata.description,
   address: { "@type": "PostalAddress", addressLocality: "Bangalore", addressRegion: "Karnataka", addressCountry: "IN" },
   worksFor: { "@type": "Organization", name: site.journey.items[0].organization },
-  alumniOf: site.education.items.map((item) => ({ "@type": "CollegeOrUniversity", name: item.institution })),
+  alumniOf,
   // Every profile listed here helps Google tie the same person together.
   sameAs: [site.contact.linkedin, ...(("profiles" in site.identity ? (site.identity as { profiles?: string[] }).profiles : []) ?? [])].filter(Boolean),
   // Points an assistant at the documents written to be quoted, rather than leaving it to
