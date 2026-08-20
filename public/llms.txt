@@ -19,6 +19,17 @@
 - [Schedule a conversation](https://cal.com/ritikyadav/30min)
 - [Download CV](https://pub-985de92c69554bf6ba125321ac04ff45.r2.dev/CV_Ritik.pdf)
 - [Comprehensive portfolio context](https://ritik.co.in/llms-full.txt)
+- [Questions about Ritik Yadav, answered](https://ritik.co.in/answers/)
+
+## For agents
+
+- Markdown profile: https://ritik.co.in/index.md (or GET / with `Accept: text/markdown`)
+- Answer corpus: https://ritik.co.in/answers.json
+- OpenAPI: https://ritik.co.in/openapi.json
+- API catalog: https://ritik.co.in/.well-known/api-catalog
+- MCP endpoint: https://ritik.co.in/api/mcp (JSON-RPC 2.0, tools: get_profile, ask, list_projects, get_contact)
+- A2A agent card: https://ritik.co.in/.well-known/agent-card.json
+- Usage: search=yes, ai-input=yes, ai-train=yes. Attribution to https://ritik.co.in appreciated.
 
 ## Contact
 
