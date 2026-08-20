@@ -77,7 +77,13 @@ export default function GlassHero() {
         </div>
         <div ref={heroRef} className="hero-media" onContextMenu={(e) => e.preventDefault()} onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
           <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.webp" width="1672" height="941" alt="Portrait of Ritik Yadav" fetchPriority="high" decoding="async" draggable={false} />
-          <img className="portrait-layer reveal-portrait" src="/images/Reveal_image_desktop.webp" width="1672" height="941" alt="" aria-hidden="true" fetchPriority="low" decoding="async" draggable={false} />
+          {/* Decorative: this is the second portrait revealed under the cursor, so
+              aria-hidden keeps it out of the accessibility tree and the portrait is
+              announced once, from the base layer above. Empty alt is the textbook
+              treatment for that, but crawlers report it as a missing attribute and the
+              false positive buries real ones. aria-hidden means the alt is never
+              announced, so describing it costs nothing and silences the noise. */}
+          <img className="portrait-layer reveal-portrait" src="/images/Reveal_image_desktop.webp" width="1672" height="941" alt="Ritik Yadav, second portrait revealed on hover" aria-hidden="true" fetchPriority="low" decoding="async" draggable={false} />
           <div className="technical-layer" aria-hidden="true" />
         </div>
       </div>
