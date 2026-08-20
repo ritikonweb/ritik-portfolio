@@ -257,5 +257,34 @@ await check("/answers/ is discoverable", async () => {
   assert.match(sitemap, /\/answers\//, "sitemap does not list /answers/");
 });
 
+/**
+ * Basics that crawlers reject a page for, checked across every URL in the sitemap rather
+ * than page by page. /answers/ shipped with no h1 and a 185 character description because
+ * its markup was copied from the homepage, where the hero owns the h1. A per-page check
+ * would not have caught that; the next page copied from the same pattern would repeat it.
+ */
+await check("every page in the sitemap has one h1 and a usable description", async () => {
+  const sitemap = await (await get("/sitemap.xml")).text();
+  const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(urls.length > 0, "sitemap has no URLs");
+
+  for (const url of urls) {
+    const html = await (await get(new URL(url).pathname)).text();
+    const where = new URL(url).pathname;
+
+    const h1s = [...html.matchAll(/<h1\b[^>]*>/g)].length;
+    assert.equal(h1s, 1, `${where} has ${h1s} h1 tags, expected exactly 1`);
+
+    const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1] || "";
+    assert.ok(title.length > 0, `${where} has no title`);
+
+    const desc = (html.match(/<meta name="description" content="([^"]*)"/) || [])[1] || "";
+    assert.ok(
+      desc.length >= 25 && desc.length <= 160,
+      `${where} description is ${desc.length} chars, needs 25 to 160`,
+    );
+  }
+});
+
 console.log(failed === 0 ? "\nall checks passed" : `\n${failed} check(s) failed`);
 process.exit(failed === 0 ? 0 : 1);

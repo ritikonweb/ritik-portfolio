@@ -12,7 +12,8 @@ import { ANSWERS, NAME, SITE_URL } from "@/lib/profile";
 
 export const metadata: Metadata = {
   title: "Questions about Ritik Yadav, answered",
-  description: `Direct answers about ${NAME}: what he has delivered in strategy, program management, business operations and AI automation, where he has worked, what he has built, and how to reach him.`,
+  // Kept under 160 characters. Crawlers flag anything longer and truncate the display.
+  description: `Direct answers about ${NAME}: what he delivered in strategy, program management and AI automation, what he has built, and how to reach him.`,
   alternates: { canonical: "/answers/" },
   // Indexable on purpose. This was noindex for a while, on the reasoning that a human
   // landing cold on 52 self-authored answers reads badly. That was a tone problem, and it
@@ -45,9 +46,12 @@ export default function AnswersPage() {
     <main id="main-content">
       <section className="content-section about-section" aria-labelledby="answers-title">
         <div className="section-shell">
+          {/* h1, not h2. The homepage pattern this markup was copied from puts the h1 in
+              the hero, so a standalone page inheriting it had no h1 at all. Styling is
+              unchanged: globals.css matches .section-heading h1 alongside h2. */}
           <header className="section-heading">
             <p className="eyebrow">Reference / Answers</p>
-            <h2 id="answers-title">Questions about my work, answered.</h2>
+            <h1 id="answers-title">Questions about my work, answered.</h1>
           </header>
 
           {/* The third person reads oddly to a human, so say why up front. It is the
