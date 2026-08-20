@@ -10,6 +10,7 @@ const agentDocs = [
   ["/auth.md", "auth-md"],
   ["/skills/hire-ritik-yadav/SKILL.md", "skill-md"],
   ["/.well-known/api-catalog", "api-catalog"],
+  ["/.well-known/security.txt", "security-txt"],
   ["/.well-known/agent-card.json", "agent-card"],
   ["/.well-known/mcp/server-card.json", "mcp-server-card"],
   ["/.well-known/agent-skills/index.json", "skills-index"],
@@ -48,6 +49,12 @@ const nextConfig = {
         { source, destination: `/api/agent/${doc}` },
         { source: `${source}/`, destination: `/api/agent/${doc}` },
       ]),
+      // Next serves the touch icon at /apple-icon.png and advertises it with a link tag,
+      // which compliant clients follow. Older iOS and plenty of crawlers request these two
+      // fixed paths regardless and get a 404. A rewrite is preferable to committing a
+      // second copy of the same PNG under a legacy name.
+      { source: "/apple-touch-icon.png", destination: "/apple-icon.png" },
+      { source: "/apple-touch-icon-precomposed.png", destination: "/apple-icon.png" },
     ];
   },
   async headers() {

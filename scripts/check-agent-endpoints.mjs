@@ -163,6 +163,27 @@ await check("skills index digest matches the served SKILL.md", async () => {
   assert.equal(digest, skill.digest, "digest in the index does not match the file it points to");
 });
 
+// The Expires field is the whole reason this is generated rather than a static file, so
+// assert it is actually in the future. A stale security.txt is treated as invalid.
+await check("security.txt is valid and not expired", async () => {
+  const response = await get("/.well-known/security.txt");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /text\/plain/);
+  const body = await response.text();
+  assert.match(body, /^Contact: mailto:/m);
+  const expires = (body.match(/^Expires: (.+)$/m) || [])[1];
+  assert.ok(expires, "no Expires field");
+  assert.ok(new Date(expires) > new Date(), `Expires is in the past: ${expires}`);
+});
+
+await check("legacy touch icon paths resolve", async () => {
+  for (const path of ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"]) {
+    const response = await get(path);
+    assert.equal(response.status, 200, `${path} returned ${response.status}`);
+    assert.match(response.headers.get("content-type") || "", /image\/png/, path);
+  }
+});
+
 await check("auth.md is discoverable", async () => {
   const body = await (await get("/auth.md")).text();
   assert.match(body, /^#\s*auth\.md/im);
