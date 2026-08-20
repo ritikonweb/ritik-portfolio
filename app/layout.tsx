@@ -19,7 +19,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(site.metadata.siteUrl),
   title: { default: site.metadata.title, template: `%s | ${site.identity.name}` },
   description: site.metadata.description,
-  applicationName: `${site.identity.name} Portfolio`,
+  // Google treats application-name as a site name candidate. It used to read
+  // "Ritik Yadav Portfolio" while the manifest, og:site_name and the WebSite schema all
+  // said "Ritik Yadav", and a disagreeing set of signals is why Google fell back to
+  // showing the bare domain. Every signal now says the same three words.
+  applicationName: site.identity.name,
   authors: [{ name: site.identity.name, url: site.metadata.siteUrl }],
   creator: site.identity.name,
   publisher: site.identity.name,
@@ -80,9 +84,11 @@ const structuredData = {
       "@type": "WebSite",
       "@id": `${site.metadata.siteUrl}/#website`,
       url: site.metadata.siteUrl,
-      // Google uses these for the site name shown above the search result.
+      // Google uses these for the site name shown above the search result. Keep
+      // alternateName short: listing "Ritik Yadav Portfolio" gave Google licence to
+      // display that instead of the name actually wanted.
       name: site.identity.name,
-      alternateName: [`${site.identity.name} Portfolio`, "Ritik"],
+      alternateName: ["Ritik"],
       inLanguage: "en",
       publisher: { "@id": `${site.metadata.siteUrl}/#person` },
     },
