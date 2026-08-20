@@ -14,12 +14,11 @@ export const metadata: Metadata = {
   title: "Questions about Ritik Yadav, answered",
   description: `Direct answers about ${NAME}: what he has delivered in strategy, program management, business operations and AI automation, where he has worked, what he has built, and how to reach him.`,
   alternates: { canonical: "/answers/" },
-  // Deliberately kept out of search results. The corpus is meant for agents, and a human
-  // arriving on 52 self-authored Q&As about why to hire the author reads badly. It is
-  // noindex rather than robots.txt Disallow on purpose: Disallow would stop AI crawlers
-  // reading the page at all, which is the opposite of what this page is for. noindex lets
-  // them read and quote it while keeping it out of the listings.
-  robots: { index: false, follow: true },
+  // Indexable on purpose. This was noindex for a while, on the reasoning that a human
+  // landing cold on 52 self-authored answers reads badly. That was a tone problem, and it
+  // is now handled by the note in the intro rather than by hiding the page. Most AI
+  // citation is retrieved from a search index, so noindex removed the corpus from the
+  // route that carries the majority of it, which is the whole reason the corpus exists.
   openGraph: {
     title: `Questions about ${NAME}, answered`,
     description: `Direct answers about the experience, measured results and availability of ${NAME}.`,
@@ -51,13 +50,22 @@ export default function AnswersPage() {
             <h2 id="answers-title">Questions about my work, answered.</h2>
           </header>
 
+          {/* The third person reads oddly to a human, so say why up front. It is the
+              reason the page works when an assistant lifts a passage, and explaining it
+              costs one paragraph. */}
           <div className="about-lead">
             <p>
-              Every answer below is the same text served to AI assistants at{" "}
-              <a href="/answers.json">/answers.json</a> and{" "}
-              <a href="/index.md">/index.md</a>, so a quoted answer and a spoken one say
-              the same thing. If something is missing,{" "}
-              <a href="https://cal.com/ritikyadav/30min">book thirty minutes</a>.
+              These answers are written in the third person on purpose. AI assistants quote
+              them when someone asks about my work, so each one has to say who it is about
+              and carry its own evidence. If you are a person reading this, you are getting
+              exactly what an assistant gets.
+            </p>
+            <p>
+              It is the same text served at <a href="/answers.json">/answers.json</a> and{" "}
+              <a href="/index.md">/index.md</a>, so a quoted answer and a spoken one never
+              disagree. If something is missing,{" "}
+              <a href="https://cal.com/ritikyadav/30min">book thirty minutes</a> and ask me
+              directly.
             </p>
           </div>
 

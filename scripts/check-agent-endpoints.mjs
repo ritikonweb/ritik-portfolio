@@ -238,21 +238,23 @@ await check("A2A message/send returns a completed task", async () => {
   assert.match(task.artifacts[0].parts[0].text, /Ritik Yadav/);
 });
 
-// The page stays readable for agents but must stay out of search listings, and it must
-// not be reachable from the homepage. Both halves are easy to undo by accident.
-await check("/answers/ is readable but noindex", async () => {
+// This page was noindex for a while. It is indexable now on purpose, so guard against the
+// old state creeping back: no noindex, present in the sitemap, reachable from the homepage.
+// An orphaned page with valid markup is a page nothing ever reads.
+await check("/answers/ is indexable", async () => {
   const response = await get("/answers/");
   assert.equal(response.status, 200);
   const body = await response.text();
   assert.match(body, /Who is Ritik Yadav\?/);
-  assert.match(body, /<meta name="robots" content="[^"]*noindex/);
+  assert.match(body, /"@type":"FAQPage"/);
+  assert.doesNotMatch(body, /<meta name="robots" content="[^"]*noindex/, "noindex is back on /answers/");
 });
 
-await check("/answers/ is not linked or listed", async () => {
+await check("/answers/ is discoverable", async () => {
   const home = await (await get("/")).text();
-  assert.doesNotMatch(home, /href="\/answers\/"/, "homepage still links to /answers/");
+  assert.match(home, /href="\/answers\/"/, "homepage does not link /answers/");
   const sitemap = await (await get("/sitemap.xml")).text();
-  assert.doesNotMatch(sitemap, /\/answers\//, "sitemap still lists /answers/");
+  assert.match(sitemap, /\/answers\//, "sitemap does not list /answers/");
 });
 
 console.log(failed === 0 ? "\nall checks passed" : `\n${failed} check(s) failed`);

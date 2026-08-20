@@ -19,7 +19,7 @@
 - [Schedule a conversation](https://cal.com/ritikyadav/30min)
 - [Download CV](https://pub-985de92c69554bf6ba125321ac04ff45.r2.dev/CV_Ritik.pdf)
 - [Comprehensive portfolio context](https://ritik.co.in/llms-full.txt)
-- [Questions about Ritik Yadav, answered](https://ritik.co.in/answers.json)
+- [Questions about Ritik Yadav, answered](https://ritik.co.in/answers/)
 
 ## For agents
 
