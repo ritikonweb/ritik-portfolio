@@ -18,9 +18,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
-    // /answers/ is intentionally absent. It carries noindex, so listing it here would
-    // only ask Google to crawl a page it is then told not to index. Agents reach the same
-    // corpus through /answers.json, /index.md and /llms-full.txt, all advertised in
-    // robots.txt and llms.txt.
+    {
+      url: `${base}/answers/`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
   ];
 }

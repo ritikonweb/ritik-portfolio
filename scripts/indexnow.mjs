@@ -17,9 +17,8 @@
 const KEY = "348cd8aff311ac5502d7846f287836f2";
 const HOST = "ritik.co.in";
 
-// Only pages, and only pages meant to be indexed. /answers/ is deliberately absent: it
-// carries noindex, so asking a search engine to crawl it just wastes the request.
-const DEFAULT_URLS = [`https://${HOST}/`];
+// Only pages, and only pages meant to be indexed. Keep this in step with app/sitemap.ts.
+const DEFAULT_URLS = [`https://${HOST}/`, `https://${HOST}/answers/`];
 
 const urls = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_URLS;
 
