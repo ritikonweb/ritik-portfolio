@@ -239,7 +239,28 @@ function authMarkdown(): string {
   ].join("\n");
 }
 
+/**
+ * RFC 9116 security.txt. Generated rather than a static file because the spec requires an
+ * Expires date and treats a past one as invalid, so a hardcoded value would quietly rot
+ * into a failing check. Computed 90 days out on every request, which cannot go stale.
+ */
+function securityTxt(): string {
+  const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  return [
+    `Contact: mailto:${site.contact.email}`,
+    `Expires: ${expires}`,
+    "Preferred-Languages: en, hi",
+    `Canonical: ${SITE_URL}/.well-known/security.txt`,
+    "",
+    "# Personal portfolio site. No user accounts, no payments, nothing stored on a visitor's",
+    "# behalf beyond anonymous analytics. Reports about the public endpoints listed in",
+    `# ${SITE_URL}/auth.md are welcome at the address above.`,
+    "",
+  ].join("\n");
+}
+
 const TEXT: Record<string, () => { body: string; type: string }> = {
+  "security-txt": () => ({ body: securityTxt(), type: "text/plain; charset=utf-8" }),
   "index-md": () => ({ body: profileMarkdown(), type: "text/markdown; charset=utf-8" }),
   "skill-md": () => ({ body: skillMarkdown(), type: "text/markdown; charset=utf-8" }),
   "auth-md": () => ({ body: authMarkdown(), type: "text/markdown; charset=utf-8" }),
