@@ -69,8 +69,8 @@ const personSchema = {
   // Points an assistant at the documents written to be quoted, rather than leaving it to
   // reconstruct answers from the page layout.
   subjectOf: [
-    { "@type": "FAQPage", "@id": `${site.metadata.siteUrl}/answers/#faq`, url: `${site.metadata.siteUrl}/answers/`, name: `Questions about ${site.identity.name}, answered` },
     { "@type": "DigitalDocument", name: "Machine-readable profile", url: `${site.metadata.siteUrl}/index.md`, encodingFormat: "text/markdown" },
+    { "@type": "DigitalDocument", name: "Answer corpus", url: `${site.metadata.siteUrl}/answers.json`, encodingFormat: "application/json" },
   ],
   knowsLanguage: ["en", "hi"],
   nationality: { "@type": "Country", name: "India" },
