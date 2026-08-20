@@ -67,7 +67,12 @@ const TOOLS = [
 
 export default function AgentTools() {
   useEffect(() => {
-    const modelContext = (navigator as Navigator & { modelContext?: ModelContext }).modelContext;
+    // document.modelContext is the current surface. navigator.modelContext is a
+    // deprecated alias as of Chrome 150 whose accessor logs a console warning and is
+    // slated for removal, so probe document first and only fall back for older builds.
+    const modelContext =
+      (document as Document & { modelContext?: ModelContext }).modelContext ??
+      (navigator as Navigator & { modelContext?: ModelContext }).modelContext;
     if (!modelContext?.registerTool) return;
 
     const handles: Array<{ unregister?: () => void }> = [];
