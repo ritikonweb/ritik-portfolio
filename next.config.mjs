@@ -56,9 +56,20 @@ const nextConfig = {
         source: "/",
         headers: [
           { key: "Link", value: linkHeader },
-          // The homepage returns markdown or HTML depending on Accept, so no cache may
-          // reuse one for the other.
-          { key: "Vary", value: "Accept" },
+          // `/` answers with HTML or markdown depending on Accept, so a shared cache must
+          // not be able to store one and hand it back for the other.
+          //
+          // Vary: Accept would be the obvious fix and does not work here: `/` is
+          // statically prerendered and the App Router rewrites Vary for RSC, discarding
+          // anything set in middleware or in this block. Link survives, Vary does not.
+          // Measured, not assumed.
+          //
+          // So remove the reusability instead. Next's default for a static route is
+          // `s-maxage=31536000`, a year of shared-cache reuse, which is what makes the
+          // missing Vary dangerous. Requiring revalidation costs little on a prerendered
+          // page and it is already what Vercel serves to clients today; this just makes it
+          // true everywhere rather than only behind Vercel.
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
         ],
       },
       // Agents that follow a link into a well-known document should be able to read it
