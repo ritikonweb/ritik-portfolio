@@ -15,6 +15,14 @@ import assert from "node:assert/strict";
 
 const base = (process.argv[2] || process.env.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 
+// Vercel preview deployments sit behind Deployment Protection, which 302s every request
+// to an SSO page. Without this header the checks silently grade a login screen. Get the
+// secret from Vercel: Project Settings -> Deployment Protection -> Protection Bypass for
+// Automation, then run with VERCEL_BYPASS=<secret>.
+const BYPASS = process.env.VERCEL_BYPASS
+  ? { "x-vercel-protection-bypass": process.env.VERCEL_BYPASS, "x-vercel-set-bypass-cookie": "true" }
+  : {};
+
 let failed = 0;
 async function check(name, fn) {
   try {
@@ -26,12 +34,12 @@ async function check(name, fn) {
   }
 }
 
-const get = (path, headers = {}) => fetch(`${base}${path}`, { headers, redirect: "follow" });
+const get = (path, headers = {}) => fetch(`${base}${path}`, { headers: { ...BYPASS, ...headers }, redirect: "follow" });
 
 async function rpc(path, method, params = {}) {
   const response = await fetch(`${base}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...BYPASS, "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
   assert.equal(response.status, 200, `${path} ${method} returned ${response.status}`);
@@ -39,6 +47,15 @@ async function rpc(path, method, params = {}) {
 }
 
 console.log(`checking ${base}\n`);
+
+// Fail fast with a useful message. Without this, a protected preview reports 16 confusing
+// failures that all mean "you are reading a login page".
+const preflight = await fetch(`${base}/robots.txt`, { headers: BYPASS, redirect: "manual" });
+if (/vercel\.com\/sso-api/.test(preflight.headers.get("location") || "")) {
+  console.log("Vercel Deployment Protection is on: every request redirects to SSO.");
+  console.log("Set VERCEL_BYPASS=<protection bypass secret> and re-run, or check the production URL.");
+  process.exit(1);
+}
 
 await check("robots.txt declares content signals", async () => {
   const response = await get("/robots.txt");
