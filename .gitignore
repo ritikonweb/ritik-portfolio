@@ -19,6 +19,10 @@ applications/
 scripts/pdf-text-check.mjs
 .env.local
 
+# Generated query matrix for AEO coverage tracking. Regenerate with `npm run queries`
+# rather than committing half a megabyte of permutations.
+content/queries.txt
+
 # Local diagnostics for the voice bot, never published
 scripts/voice-key-test.mjs
 scripts/voice-audit-accounts.mjs

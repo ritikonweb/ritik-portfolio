@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:agents": "node scripts/check-agent-endpoints.mjs",
+    "queries": "node scripts/aeo-queries.mjs"
   },
   "dependencies": {
     "@deepgram/agents": "0.1.1",

@@ -1,3 +1,4 @@
+import AgentTools from "@/components/agent-tools";
 import GlassHero from "@/components/glass-hero";
 import PortfolioSections from "@/components/portfolio-sections";
 import ScrollReveal from "@/components/scroll-reveal";
@@ -9,6 +10,7 @@ export default function Home() {
       <GlassHero />
       <PortfolioSections />
       <ScrollReveal />
+      <AgentTools />
     </main>
   );
 }

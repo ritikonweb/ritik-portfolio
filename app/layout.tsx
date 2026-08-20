@@ -25,7 +25,12 @@ export const metadata: Metadata = {
   publisher: site.identity.name,
   keywords: ["Ritik Yadav", "Ritik Yadav portfolio", "Ritik Yadav Bangalore", "Ritik Yadav strategy", "program management", "business operations", "chief of staff", "strategy and operations", "Flow Realty", "Rustomjee"],
   category: "Business",
-  alternates: { canonical: "/" },
+  // The markdown alternate is the same content an agent gets from GET / with
+  // Accept: text/markdown. Advertised here too, for anything that only parses HTML.
+  alternates: {
+    canonical: "/",
+    types: { "text/markdown": "/index.md", "text/plain": "/llms.txt" },
+  },
   openGraph: {
     title: site.metadata.title,
     description: site.metadata.description,
@@ -57,6 +62,12 @@ const personSchema = {
   alumniOf: site.education.items.map((item) => ({ "@type": "CollegeOrUniversity", name: item.institution })),
   // Every profile listed here helps Google tie the same person together.
   sameAs: [site.contact.linkedin, ...(("profiles" in site.identity ? (site.identity as { profiles?: string[] }).profiles : []) ?? [])].filter(Boolean),
+  // Points an assistant at the documents written to be quoted, rather than leaving it to
+  // reconstruct answers from the page layout.
+  subjectOf: [
+    { "@type": "FAQPage", "@id": `${site.metadata.siteUrl}/answers/#faq`, url: `${site.metadata.siteUrl}/answers/`, name: `Questions about ${site.identity.name}, answered` },
+    { "@type": "DigitalDocument", name: "Machine-readable profile", url: `${site.metadata.siteUrl}/index.md`, encodingFormat: "text/markdown" },
+  ],
   knowsLanguage: ["en", "hi"],
   nationality: { "@type": "Country", name: "India" },
   knowsAbout: site.skills.groups.flatMap((group) => group.items),
