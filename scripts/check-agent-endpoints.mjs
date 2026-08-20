@@ -192,12 +192,21 @@ await check("A2A message/send returns a completed task", async () => {
   assert.match(task.artifacts[0].parts[0].text, /Ritik Yadav/);
 });
 
-await check("/answers/ renders the FAQ with schema", async () => {
+// The page stays readable for agents but must stay out of search listings, and it must
+// not be reachable from the homepage. Both halves are easy to undo by accident.
+await check("/answers/ is readable but noindex", async () => {
   const response = await get("/answers/");
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.match(body, /"@type":"FAQPage"/);
   assert.match(body, /Who is Ritik Yadav\?/);
+  assert.match(body, /<meta name="robots" content="[^"]*noindex/);
+});
+
+await check("/answers/ is not linked or listed", async () => {
+  const home = await (await get("/")).text();
+  assert.doesNotMatch(home, /href="\/answers\/"/, "homepage still links to /answers/");
+  const sitemap = await (await get("/sitemap.xml")).text();
+  assert.doesNotMatch(sitemap, /\/answers\//, "sitemap still lists /answers/");
 });
 
 console.log(failed === 0 ? "\nall checks passed" : `\n${failed} check(s) failed`);

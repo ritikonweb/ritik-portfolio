@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: "Questions about Ritik Yadav, answered",
   description: `Direct answers about ${NAME}: what he has delivered in strategy, program management, business operations and AI automation, where he has worked, what he has built, and how to reach him.`,
   alternates: { canonical: "/answers/" },
+  // Deliberately kept out of search results. The corpus is meant for agents, and a human
+  // arriving on 52 self-authored Q&As about why to hire the author reads badly. It is
+  // noindex rather than robots.txt Disallow on purpose: Disallow would stop AI crawlers
+  // reading the page at all, which is the opposite of what this page is for. noindex lets
+  // them read and quote it while keeping it out of the listings.
+  robots: { index: false, follow: true },
   openGraph: {
     title: `Questions about ${NAME}, answered`,
     description: `Direct answers about the experience, measured results and availability of ${NAME}.`,
