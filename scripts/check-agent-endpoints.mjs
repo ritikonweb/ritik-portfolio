@@ -74,17 +74,42 @@ await check("/index.md serves markdown", async () => {
   assert.match(body, /## Experience/);
 });
 
+// Vary must be checked token by token. A substring match on /accept/i passes on
+// "accept-encoding", which Next adds by itself, so the original version of this check
+// reported success while the Accept token was absent from the HTML response entirely.
+const varies = (response) =>
+  (response.headers.get("vary") || "").split(",").map((v) => v.trim().toLowerCase());
+
 await check("GET / negotiates markdown on Accept", async () => {
   const response = await get("/", { Accept: "text/markdown" });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /text\/markdown/);
-  assert.match(response.headers.get("vary") || "", /Accept/i);
+  assert.ok(varies(response).includes("accept"), `Vary lacks Accept: ${response.headers.get("vary")}`);
   assert.match(await response.text(), /^# Ritik Yadav/);
 });
 
-await check("GET / still serves HTML to browsers", async () => {
+/**
+ * The homepage returns HTML or markdown for the same URL, so a shared cache must never be
+ * able to store one and serve it for the other.
+ *
+ * Two ways to satisfy that, and only one of them has to hold. Either the response declares
+ * Vary: Accept, or it is not reusable without revalidating. Asserting Vary alone fails
+ * here: `/` is statically prerendered and the App Router overwrites Vary for RSC,
+ * discarding what middleware and next.config set. Asserting Cache-Control alone fails too,
+ * because `next start` sends none locally and Vercel adds must-revalidate in production.
+ * The invariant is the disjunction, which is what actually keeps it safe and what holds in
+ * both environments.
+ */
+await check("GET / serves HTML that no cache can substitute for markdown", async () => {
   const response = await get("/", { Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8" });
   assert.match(response.headers.get("content-type") || "", /text\/html/);
+
+  const cache = (response.headers.get("cache-control") || "").toLowerCase();
+  const revalidates = cache === "" || /no-store|no-cache|max-age=0|must-revalidate/.test(cache);
+  assert.ok(
+    varies(response).includes("accept") || revalidates,
+    `HTML is reusable from cache ("${cache}") without Vary: Accept, so a shared cache could serve it to a markdown request`,
+  );
 });
 
 await check("homepage advertises Link relations", async () => {

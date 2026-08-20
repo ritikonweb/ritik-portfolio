@@ -32,8 +32,19 @@ export function middleware(request: NextRequest) {
     const wantsMarkdown =
       quality(accept, "text/markdown") > Math.max(quality(accept, "text/html"), quality(accept, "application/xhtml+xml"));
 
-    // `Vary: Accept` is set in next.config.mjs for this path, and again by the markdown
-    // route itself, because a rewrite does not carry response headers set here.
+    // The markdown route sets its own Vary: Accept, because a rewrite does not carry
+    // response headers set here.
+    //
+    // The HTML branch does not, and cannot: `/` is statically prerendered, and the App
+    // Router rewrites Vary itself for RSC and accept-encoding, discarding anything set in
+    // middleware or next.config.mjs headers(). Verified by measurement, not assumed.
+    //
+    // Safe in practice for two reasons. Negotiation is a rewrite to a different path, so
+    // origin cache keys already differ. And `/` is served with
+    // `Cache-Control: public, must-revalidate, max-age=0`, so a downstream shared cache
+    // has to revalidate before reusing the HTML, and revalidation runs this middleware
+    // again. If that Cache-Control is ever loosened, add Vary: Accept with a Cloudflare
+    // Transform Rule, which sits outside Next and is not overwritten.
     if (wantsMarkdown) return NextResponse.rewrite(new URL("/api/agent/index-md", request.url));
   }
 
