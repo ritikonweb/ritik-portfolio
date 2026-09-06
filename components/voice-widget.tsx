@@ -81,6 +81,11 @@ const HINTS: Record<Phase, string> = {
   speaking: "Tap to interrupt",
 };
 
+// Rolls after the idle label. These answer the real reason people do not tap a mic on a
+// personal site, which is not knowing what they are allowed to ask. The last entry repeats
+// the first so the loop has no visible jump.
+const PROMPTS = ["anything", "about my work", "why hire me", "anything"];
+
 // ponytail: MicIcon, StopIcon, Bars removed — ParticlesOrb replaces all three glyphs.
 
 /** Maps the widget's Phase to the orb's OrbState (1:1 today, adapter in case they diverge). */
@@ -570,13 +575,24 @@ export default function VoiceWidget() {
         <span className="voice-orb-wrap" aria-hidden="true">
           <ParticlesOrb
             state={phaseToOrb(phase)}
-            size={42}
-            speed={0.5}
-            colorFrom="#94a3b8"
-            colorTo="#e2e8f0"
+            size={212}
+            speed={1}
+            colorFrom="#4f46e5"
+            colorTo="#a78bfa"
           />
         </span>
-        <span className="voice-label">{LABELS[phase]}</span>
+        <span className="voice-text">
+          <span className="voice-label">{LABELS[phase]}</span>
+          {phase === "idle" ? (
+            <span className="voice-cycle" aria-hidden="true">
+              <span>
+                {PROMPTS.map((prompt, index) => (
+                  <b key={`${prompt}-${index}`}>{prompt}</b>
+                ))}
+              </span>
+            </span>
+          ) : null}
+        </span>
       </button>
       <span className="voice-status" role="status" aria-live="polite">{message}</span>
     </span>

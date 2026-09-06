@@ -1,215 +1,343 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import type { RefObject } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+
 import {
-  type OrbState,
-  type OrbProps,
-  hexToRgb,
-  stateEnergy,
   approach,
+  createStateMix,
   ERROR_COLOR_FROM,
   ERROR_COLOR_TO,
+  hexToRgb,
+  ORB_STATES,
+  orbVars,
+  stateEnergy,
+  stateMotion,
+  type OrbProps,
 } from '@/registry/lib/orb-state';
 import { useOrbLevel } from '@/registry/lib/use-orb-level';
 import { observeActivity } from '@/registry/lib/use-in-view';
 
-/* ─── constants ─── */
-const TAU = Math.PI * 2;
-const PARTICLE_COUNT = 120;
-const BASE_ORBIT = 0.34;       // fraction of size
-const ORBIT_SPREAD = 0.12;
-const PARTICLE_MIN = 1;
-const PARTICLE_MAX = 2.6;
-const GLOW_ALPHA = 0.12;
+const PARTICLE_COUNT = 720;
+const TWO_PI = Math.PI * 2;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const STATIC_TIME = 1.7;
 
-interface Particle {
-  angle: number;
-  radius: number;      // orbit radius as fraction of half-size
-  speed: number;       // radians per second
-  size: number;
-  phase: number;       // individual shimmer offset
-  drift: number;       // radial drift amplitude
+const ERROR_FROM_RGB = hexToRgb(ERROR_COLOR_FROM);
+const ERROR_TO_RGB = hexToRgb(ERROR_COLOR_TO);
+
+type Rgb = [number, number, number];
+
+const mixRgb = (a: Rgb, b: Rgb, m: number): Rgb => [
+  a[0] + (b[0] - a[0]) * m,
+  a[1] + (b[1] - a[1]) * m,
+  a[2] + (b[2] - a[2]) * m,
+];
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+interface SpherePoint {
+  x: number;
+  y: number;
+  z: number;
+  ringFrac: number;
+  seed: number;
+  tone: number;
 }
 
-const makeParticles = (): Particle[] =>
-  Array.from({ length: PARTICLE_COUNT }, () => ({
-    angle: Math.random() * TAU,
-    radius: BASE_ORBIT + (Math.random() - 0.5) * 2 * ORBIT_SPREAD,
-    speed: (0.15 + Math.random() * 0.35) * (Math.random() > 0.5 ? 1 : -1),
-    size: PARTICLE_MIN + Math.random() * (PARTICLE_MAX - PARTICLE_MIN),
-    phase: Math.random() * TAU,
-    drift: 0.01 + Math.random() * 0.04,
-  }));
+const buildSphere = (count: number): SpherePoint[] => {
+  const points: SpherePoint[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const y = 1 - (i / (count - 1)) * 2;
+    const radiusAtY = Math.sqrt(1 - y * y);
+    const theta = GOLDEN_ANGLE * i;
+    points.push({
+      x: Math.cos(theta) * radiusAtY,
+      y,
+      z: Math.sin(theta) * radiusAtY,
+      ringFrac: (i * 0.61803398875) % 1,
+      seed: ((i * 0.7548776662) % 1) * TWO_PI,
+      tone: (i * 0.5436890126) % 1,
+    });
+  }
+  return points;
+};
 
-export function ParticlesOrb({
+export const ParticlesOrb = ({
   state = 'idle',
-  size = 128,
-  speed = 0.5,
-  colorFrom = '#94a3b8',
-  colorTo = '#e2e8f0',
+  size = 168,
+  speed = 1,
+  colorFrom = '#f0abfc',
+  colorTo = '#818cf8',
   levelRef,
-  label,
+  label = 'Assistant orb',
   className,
-  ref: externalRef,
-}: OrbProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  ref: forwardedRef,
+}: OrbProps) => {
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>(makeParticles());
-  const clockRef = useRef(0);
-  const smoothLevelRef = useRef(0);
+  const stateRef = useRef(state);
+  const speedRef = useRef(speed);
+  const colorRef = useRef({ from: colorFrom, to: colorTo });
+  const drawStaticRef = useRef<(() => void) | null>(null);
 
-  // Drive CSS vars for the level (used by useOrbLevel internally)
-  useOrbLevel(containerRef, state, levelRef);
-
-  // Resolve colors, switching to error palette when needed
-  const fromRgb = hexToRgb(state === 'error' ? ERROR_COLOR_FROM : colorFrom);
-  const toRgb = hexToRgb(state === 'error' ? ERROR_COLOR_TO : colorTo);
-
-  const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number) => {
-      const t = clockRef.current;
-      const energy = levelRef?.current != null && levelRef.current >= 0
-        ? levelRef.current
-        : stateEnergy(state, t);
-      smoothLevelRef.current = approach(smoothLevelRef.current, energy, 6, dt);
-      const level = smoothLevelRef.current;
-
-      const cx = w / 2;
-      const cy = h / 2;
-      const half = Math.min(w, h) / 2;
-
-      ctx.clearRect(0, 0, w, h);
-
-      // Core glow
-      const glowRadius = half * (0.18 + level * 0.14);
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
-      const coreAlpha = GLOW_ALPHA + level * 0.16;
-      glow.addColorStop(0, `rgba(${fromRgb[0]},${fromRgb[1]},${fromRgb[2]},${coreAlpha.toFixed(2)})`);
-      glow.addColorStop(1, `rgba(${toRgb[0]},${toRgb[1]},${toRgb[2]},0)`);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, glowRadius, 0, TAU);
-      ctx.fill();
-
-      // Particles
-      const particles = particlesRef.current;
-      const spd = speed;
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.angle += p.speed * spd * dt;
-
-        const breathe = level * 0.08;
-        const radialOsc = Math.sin(t * 1.6 + p.phase) * p.drift * (1 + level * 2.5);
-        const r = (p.radius + breathe + radialOsc) * half;
-
-        const px = cx + Math.cos(p.angle) * r;
-        const py = cy + Math.sin(p.angle) * r;
-
-        // Particle shimmer
-        const shimmer = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.8 + p.phase));
-        const alpha = shimmer * (0.45 + level * 0.55);
-
-        // Lerp color
-        const mix = (i / particles.length + Math.sin(t * 0.4 + p.phase) * 0.15) % 1;
-        const cr = Math.round(fromRgb[0] + (toRgb[0] - fromRgb[0]) * mix);
-        const cg = Math.round(fromRgb[1] + (toRgb[1] - fromRgb[1]) * mix);
-        const cb = Math.round(fromRgb[2] + (toRgb[2] - fromRgb[2]) * mix);
-
-        const dotSize = p.size * (0.7 + level * 0.6);
-
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-        ctx.beginPath();
-        ctx.arc(px, py, dotSize, 0, TAU);
-        ctx.fill();
+  const setHostRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      hostRef.current = node;
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }
-
-      ctx.globalAlpha = 1;
     },
-    [state, speed, fromRgb, toRgb, levelRef],
+    [forwardedRef],
   );
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    stateRef.current = state;
+    speedRef.current = speed;
+    colorRef.current = { from: colorFrom, to: colorTo };
+  });
 
-    const dpr = window.devicePixelRatio || 1;
-    const w = size * dpr;
-    const h = size * dpr;
-    canvas.width = w;
-    canvas.height = h;
+  useOrbLevel(hostRef, state, levelRef);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const canvas = canvasRef.current;
+    if (!host || !canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.scale(dpr, dpr);
+
+    const points = buildSphere(PARTICLE_COUNT);
+    const center = size / 2;
+    const baseRadius = center * 0.62;
+
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const stateMix = createStateMix(stateRef.current);
+
+    let t = reduce ? STATIC_TIME : 0;
+    let angleY = 0;
+    let connectingPhase = 0;
+    const angleX = 0.32;
+    let levelS = 0;
+
     let raf = 0;
     let last: number | null = null;
-    let active = true;
+    let running = true;
+
+    const render = (dt: number, isStatic = false) => {
+      const st = stateRef.current;
+      const spd = speedRef.current;
+      const easeDt = isStatic ? 60 : dt;
+      const w = stateMix.update(st, easeDt);
+
+      let ripple = 0;
+      let pulse = 0;
+      let flow = 0;
+      for (const s of ORB_STATES) {
+        const kind = stateMotion(s);
+        if (kind === 'ripple') ripple += w[s];
+        else if (kind === 'pulse') pulse += w[s];
+        else if (kind === 'flow') flow += w[s];
+      }
+
+      const wIdle = w.idle;
+      const wConn = w.connecting;
+      const wError = w.error;
+      const wDisabled = w.disabled;
+      const motionScale = 1 - wDisabled * 0.96;
+
+      const rawLevel = isStatic
+        ? stateEnergy(st, t)
+        : clamp01(Number.parseFloat(getComputedStyle(host).getPropertyValue('--orb-level')) || 0);
+      levelS = approach(levelS, rawLevel, 9, easeDt);
+      const level = levelS;
+
+      const spin = (0.14 + ripple * (0.9 + level * 1.6) + flow * 0.4 + wConn * 0.3) * motionScale;
+      angleY += dt * spd * spin;
+      connectingPhase = (connectingPhase + dt * spd * 1.1) % TWO_PI;
+
+      const breathe = 0.05 * (0.25 + wIdle * 0.75) * Math.sin(t * 1.1 * spd) * motionScale;
+      const conv = pulse * (0.22 + 0.12 * Math.sin(t * 2.6 * spd + 1));
+      const expand = flow * (0.08 + level * 0.32);
+      const radius = baseRadius * (1 + breathe + level * 0.16 + expand - conv);
+
+      const from = mixRgb(hexToRgb(colorRef.current.from), ERROR_FROM_RGB, wError);
+      const to = mixRgb(hexToRgb(colorRef.current.to), ERROR_TO_RGB, wError);
+
+      const shakeAmp = wError * radius * 0.05 * motionScale;
+      const shakeX = shakeAmp * (Math.sin(t * 26 * spd) + 0.5 * Math.sin(t * 15.7 * spd));
+      const shakeY = shakeAmp * (Math.cos(t * 22.5 * spd) + 0.5 * Math.sin(t * 13.1 * spd));
+
+      const idleAmp = wIdle * radius * 0.055 * motionScale;
+      const jitterAmp = (flow + wError * 0.7) * radius * (0.015 + level * 0.085) * motionScale;
+      const rippleAmp = ripple * (0.045 + level * 0.24);
+      const pulseAmp = pulse * 0.16;
+
+      const alphaScale = 1 - wDisabled * 0.35;
+
+      const cosY = Math.cos(angleY);
+      const sinY = Math.sin(angleY);
+      const cosX = Math.cos(angleX);
+      const sinX = Math.sin(angleX);
+
+      ctx.clearRect(0, 0, size, size);
+
+      const glow = ripple + pulse + flow;
+      ctx.globalCompositeOperation = !isStatic && glow > 0.5 ? 'lighter' : 'source-over';
+
+      for (let i = 0; i < points.length; i += 1) {
+        const p = points[i];
+
+        const x1 = p.x * cosY - p.z * sinY;
+        const z1 = p.x * sinY + p.z * cosY;
+        const y1 = p.y * cosX - z1 * sinX;
+        const z2 = p.y * sinX + z1 * cosX;
+        const depth = (z2 + 1) / 2;
+        const perspective = 0.65 + depth * 0.45;
+
+        let pointRadius = radius;
+
+        if (rippleAmp > 0.002) {
+          pointRadius *= 1 + rippleAmp * Math.sin(p.y * 4.5 - t * 6.5 * spd);
+        }
+
+        if (pulseAmp > 0.002) {
+          pointRadius *= 1 - pulseAmp * (0.5 + 0.5 * Math.sin(p.ringFrac * TWO_PI + t * 3.1 * spd));
+        }
+
+        let ox = shakeX;
+        let oy = shakeY;
+
+        if (idleAmp > 0.01) {
+          ox +=
+            idleAmp *
+            (Math.sin(t * 0.55 * spd + p.seed * 3.7) + 0.5 * Math.sin(t * 1.3 * spd + p.seed * 1.3));
+          oy +=
+            idleAmp *
+            (Math.cos(t * 0.62 * spd + p.seed * 2.9) +
+              0.5 * Math.sin(t * 1.05 * spd + p.seed * 5.1));
+        }
+
+        if (jitterAmp > 0.01) {
+          ox += jitterAmp * Math.sin(t * 14 * spd + p.seed * 9.3);
+          oy += jitterAmp * Math.cos(t * 17 * spd + p.seed * 6.1);
+        }
+
+        const sphereX = center + x1 * pointRadius * perspective + ox;
+        const sphereY = center + y1 * pointRadius * perspective + oy;
+        const sphereAlpha = (0.12 + depth * depth * 0.78) * alphaScale;
+        const sphereDot = 0.6 + depth * 1.5;
+
+        let screenX = sphereX;
+        let screenY = sphereY;
+        let alpha = sphereAlpha;
+        let dot = sphereDot;
+
+        if (wConn > 0.004) {
+          const base = (i / points.length) * TWO_PI;
+          const jitter = 0.05 * Math.sin(t * 1.3 + p.seed);
+          const ringAngle = base + connectingPhase + jitter;
+          const ringR =
+            center * (0.58 + 0.13 * p.ringFrac) * (1 + 0.05 * Math.sin(t + p.seed * 1.7));
+          const circleX = center + Math.cos(ringAngle) * ringR;
+          const circleY = center + Math.sin(ringAngle) * ringR;
+          const ringAlpha = 0.35 + p.tone * 0.5;
+          const ringDot = 0.75 + p.tone * 0.9;
+
+          screenX = sphereX + (circleX - sphereX) * wConn;
+          screenY = sphereY + (circleY - sphereY) * wConn;
+          alpha = sphereAlpha + (ringAlpha - sphereAlpha) * wConn;
+          dot = sphereDot + (ringDot - sphereDot) * wConn;
+        }
+
+        const cr = from[0] + (to[0] - from[0]) * p.tone;
+        const cg = from[1] + (to[1] - from[1]) * p.tone;
+        const cb = from[2] + (to[2] - from[2]) * p.tone;
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${cr | 0}, ${cg | 0}, ${cb | 0}, ${alpha.toFixed(3)})`;
+        ctx.arc(screenX, screenY, dot, 0, TWO_PI);
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+    };
+
+    if (reduce) {
+      render(0, true);
+      drawStaticRef.current = () => render(0, true);
+      return () => {
+        drawStaticRef.current = null;
+      };
+    }
 
     const frame = (now: number) => {
       raf = 0;
       const dt = last === null ? 0 : Math.min((now - last) / 1000, 0.1);
       last = now;
-      clockRef.current += dt;
-      draw(ctx, w, h, dt);
-      if (active) raf = requestAnimationFrame(frame);
-      else last = null;
+      t += dt;
+      render(dt);
+      if (running) raf = requestAnimationFrame(frame);
     };
 
-    const wake = () => { if (raf === 0) raf = requestAnimationFrame(frame); };
-    const halt = () => { if (raf !== 0) { cancelAnimationFrame(raf); raf = 0; } last = null; };
+    const wake = () => {
+      if (raf === 0) {
+        last = null;
+        raf = requestAnimationFrame(frame);
+      }
+    };
 
-    const unobserve = observeActivity(container, (next) => {
-      active = next;
-      if (next) wake(); else halt();
+    const halt = () => {
+      if (raf !== 0) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      last = null;
+    };
+
+    const unobserve = observeActivity(host, (active) => {
+      running = active;
+      if (active) wake();
+      else halt();
     });
 
-    // Respect reduced motion
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      // Draw one static frame
-      clockRef.current = 0;
-      draw(ctx, w, h, 0);
-    } else {
-      wake();
-    }
+    wake();
 
-    return () => { halt(); unobserve(); };
-  }, [size, draw]);
+    return () => {
+      halt();
+      unobserve();
+    };
+  }, [size]);
 
-  // Sync external ref
   useEffect(() => {
-    if (!externalRef) return;
-    if (typeof externalRef === 'function') externalRef(containerRef.current);
-    else if ('current' in externalRef) {
-      (externalRef as React.MutableRefObject<HTMLDivElement | null>).current = containerRef.current;
-    }
-  }, [externalRef]);
+    drawStaticRef.current?.();
+  }, [state, colorFrom, colorTo]);
 
   return (
     <div
-      ref={containerRef}
-      className={className}
+      ref={setHostRef}
       role="img"
-      aria-label={label ?? `AI assistant, ${state}`}
+      aria-label={label}
+      data-state={state}
+      className={className}
       style={{
+        ...orbVars({ size, speed, colorFrom, colorTo }),
         width: size,
         height: size,
-        position: 'relative',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        display: 'grid',
+        placeItems: 'center',
+        opacity: state === 'disabled' ? 0.5 : 1,
+        filter: state === 'disabled' ? 'grayscale(0.85)' : undefined,
+        transition: 'opacity 0.4s ease, filter 0.4s ease',
       }}
     >
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: size,
-          height: size,
-          display: 'block',
-        }}
-      />
+      <canvas ref={canvasRef} style={{ width: size, height: size }} />
     </div>
   );
-}
+};
