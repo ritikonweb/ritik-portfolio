@@ -14,10 +14,10 @@
 .voice-orb-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 2.75rem;width:2.75rem;height:2.75rem;pointer-events:none}
 .voice-orb-wrap>div{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 .voice-cta[data-phase=idle] .voice-orb-wrap{opacity:.9}.voice-cta:hover .voice-orb-wrap{opacity:1}
-.voice-text{display:inline-flex;align-items:center;gap:.35rem}
-.voice-label{white-space:nowrap;font-weight:700;font-size:1rem;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.3rem}
+.voice-text{display:inline-flex;align-items:center;gap:.4rem}
+.voice-label{display:inline-flex;align-items:center;white-space:nowrap;font-weight:700;font-size:1rem;line-height:1;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.3rem}
 .voice-cta[data-phase=connecting] .voice-label,.voice-cta[data-phase=thinking] .voice-label{animation:voice-breathe 1.6s ease-in-out infinite}
-.voice-cycle{--h:1.1rem;display:inline-block;height:var(--h);overflow:hidden;vertical-align:middle;position:relative;top:-.05rem;font-family:var(--font-fragment),ui-monospace,monospace;font-size:.6rem;font-weight:400;letter-spacing:.16em;text-transform:uppercase;opacity:.58}
+.voice-cycle{--h:1rem;display:inline-flex;align-items:center;height:var(--h);overflow:hidden;font-family:var(--font-fragment),ui-monospace,monospace;font-size:.6rem;font-weight:400;line-height:1;letter-spacing:.16em;text-transform:uppercase;opacity:.58}
 .voice-cycle>span{display:block;animation:voice-roll 9s cubic-bezier(.8,0,.2,1) infinite}
 .voice-cycle b{display:flex;align-items:center;height:var(--h);font-weight:400;line-height:1;white-space:nowrap}
 @keyframes voice-roll{0%,26%{transform:translateY(0)}33%,59%{transform:translateY(calc(var(--h)*-1))}66%,92%{transform:translateY(calc(var(--h)*-2))}100%{transform:translateY(calc(var(--h)*-3))}}

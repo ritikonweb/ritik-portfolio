@@ -91,18 +91,6 @@ const PROMPTS = ["anything", "about my work", "why hire me", "anything"];
 /** Maps the widget's Phase to the orb's OrbState (1:1 today, adapter in case they diverge). */
 const phaseToOrb = (p: Phase): OrbState => p;
 
-// Each phase gets its own palette and spin so the orb visibly changes shape and feel
-// between listening, speaking, thinking etc. The orb's motion (ripple/pulse/flow) is
-// driven by state, but distinct colour + speed makes the transition obvious at small size.
-type OrbLook = { colorFrom: string; colorTo: string; speed: number };
-const ORB_LOOK: Record<Phase, OrbLook> = {
-  idle: { colorFrom: "#4f46e5", colorTo: "#a78bfa", speed: 0.8 },
-  connecting: { colorFrom: "#6366f1", colorTo: "#c4b5fd", speed: 1.1 },
-  listening: { colorFrom: "#22d3ee", colorTo: "#818cf8", speed: 1.15 },
-  thinking: { colorFrom: "#818cf8", colorTo: "#c084fc", speed: 0.7 },
-  speaking: { colorFrom: "#a78bfa", colorTo: "#f0abfc", speed: 1.5 },
-};
-
 type AgentConfig = {
   token: string;
   agent: Record<string, unknown>;
@@ -507,7 +495,7 @@ export default function VoiceWidget() {
         if (!isCurrent()) return;
         console.info("[voice] settings applied, agent ready");
         setPhase("listening");
-        setMessage("Connected. Chat is transcribed.");
+        setMessage("Connected");
       });
 
       await session.connect();
@@ -588,9 +576,9 @@ export default function VoiceWidget() {
           <ParticlesOrb
             state={phaseToOrb(phase)}
             size={52}
-            speed={ORB_LOOK[phase].speed}
-            colorFrom={ORB_LOOK[phase].colorFrom}
-            colorTo={ORB_LOOK[phase].colorTo}
+            speed={1}
+            colorFrom="#4f46e5"
+            colorTo="#a78bfa"
           />
         </span>
         <span className="voice-text">
