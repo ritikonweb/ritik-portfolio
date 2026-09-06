@@ -19,7 +19,7 @@
 .voice-sub{position:absolute;top:100%;left:50%;transform:translateX(-50%);width:max-content;max-width:min(18rem,80vw);text-align:center;color:var(--muted);font-size:.72rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;margin-top:.15rem}.voice-sub:empty{display:none}
 .voice-cycle{--h:1.15rem;display:inline-block;height:var(--h);overflow:hidden;font-family:var(--font-fragment),ui-monospace,monospace;font-size:.6rem;font-weight:400;line-height:var(--h);letter-spacing:.16em;text-transform:uppercase;opacity:.58}
 .voice-cycle>span{display:block;animation:voice-roll 9s cubic-bezier(.8,0,.2,1) infinite}
-.voice-cycle b{display:flex;align-items:center;height:var(--h);font-weight:400;line-height:var(--h);white-space:nowrap}
+.voice-cycle b{display:flex;align-items:center;justify-content:center;height:var(--h);font-weight:400;line-height:var(--h);white-space:nowrap}
 @keyframes voice-roll{0%,26%{transform:translateY(0)}33%,59%{transform:translateY(calc(var(--h)*-1))}66%,92%{transform:translateY(calc(var(--h)*-2))}100%{transform:translateY(calc(var(--h)*-3))}}
 @media(prefers-reduced-motion:reduce){.voice-cycle>span{animation:none}}
 @keyframes voice-breathe{0%,100%{opacity:1}50%{opacity:.55}}
