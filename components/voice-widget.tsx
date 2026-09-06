@@ -575,23 +575,27 @@ export default function VoiceWidget() {
         <span className="voice-orb-wrap" aria-hidden="true">
           <ParticlesOrb
             state={phaseToOrb(phase)}
-            size={212}
+            size={56}
             speed={1}
             colorFrom="#4f46e5"
             colorTo="#a78bfa"
           />
         </span>
         <span className="voice-text">
-          <span className="voice-label">{LABELS[phase]}</span>
           {phase === "idle" ? (
-            <span className="voice-cycle" aria-hidden="true">
-              <span>
-                {PROMPTS.map((prompt, index) => (
-                  <b key={`${prompt}-${index}`}>{prompt}</b>
-                ))}
+            <>
+              <span className="voice-label">Tap to ask</span>
+              <span className="voice-cycle" aria-hidden="true">
+                <span>
+                  {PROMPTS.map((prompt, index) => (
+                    <b key={`${prompt}-${index}`}>{prompt}</b>
+                  ))}
+                </span>
               </span>
-            </span>
-          ) : null}
+            </>
+          ) : (
+            <span className="voice-label">{LABELS[phase]}</span>
+          )}
         </span>
       </button>
       <span className="voice-status" role="status" aria-live="polite">{message}</span>
