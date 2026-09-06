@@ -432,6 +432,11 @@ export default function VoiceWidget() {
       session.on("audio", (chunk) => {
         if (!isCurrent()) return;
         player.queue(chunk);
+        // The agent-started-speaking event is not guaranteed by all agent configs, so
+        // detect speaking from the audio stream itself: every audio chunk means the
+        // agent is speaking. React bails if the value is already "speaking".
+        lastActivityRef.current = Date.now();
+        if (activeRef.current) setPhase("speaking");
       });
 
       session.on("user-started-speaking", () => {
