@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import type { AgentMicrophone, AgentPlayer, AgentSession } from "@deepgram/agents";
+import { ParticlesOrb } from "@/registry/orbe/particles-orb/particles-orb";
+import type { OrbState } from "@/registry/lib/orb-state";
 
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
@@ -64,17 +66,12 @@ const CLOSE_BACKSTOP_MS = 9000;
 const GOODBYE_NOTE = "Thanks for stopping by.";
 
 const LABELS: Record<Phase, string> = {
-  idle: "Ask me",
+  idle: "Tap to ask",
   connecting: "Connecting",
   listening: "Listening",
   thinking: "Thinking",
   speaking: "Speaking",
 };
-
-// Rolls after the idle label. These answer the real reason people do not tap a mic on a
-// personal site, which is not knowing what they are allowed to ask. The last entry repeats
-// the first so the loop has no visible jump.
-const PROMPTS = ["anything", "about my work", "why hire me", "anything"];
 
 const HINTS: Record<Phase, string> = {
   idle: "Ask me anything",
@@ -84,30 +81,10 @@ const HINTS: Record<Phase, string> = {
   speaking: "Tap to interrupt",
 };
 
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3.5a2.6 2.6 0 0 0-2.6 2.6v4.6a2.6 2.6 0 0 0 5.2 0V6.1A2.6 2.6 0 0 0 12 3.5Z" />
-      <path d="M6 10.7a6 6 0 0 0 12 0M12 16.7V20" />
-    </svg>
-  );
-}
+// ponytail: MicIcon, StopIcon, Bars removed — ParticlesOrb replaces all three glyphs.
 
-function StopIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <rect x="7" y="7" width="10" height="10" rx="2" />
-    </svg>
-  );
-}
-
-function Bars() {
-  return (
-    <span className="voice-bars" aria-hidden="true">
-      <i /><i /><i /><i />
-    </span>
-  );
-}
+/** Maps the widget's Phase to the orb's OrbState (1:1 today, adapter in case they diverge). */
+const phaseToOrb = (p: Phase): OrbState => p;
 
 type AgentConfig = {
   token: string;
@@ -589,22 +566,17 @@ export default function VoiceWidget() {
 
   return (
     <span className="voice-widget">
-      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Ask me anything, start a voice conversation with my AI"}>
-        <span className="voice-glyph" aria-hidden="true">
-          {phase === "listening" || phase === "speaking" ? <Bars /> : phase === "thinking" ? <StopIcon /> : <MicIcon />}
+      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Tap to ask, start a voice conversation with my AI"}>
+        <span className="voice-orb-wrap" aria-hidden="true">
+          <ParticlesOrb
+            state={phaseToOrb(phase)}
+            size={42}
+            speed={0.5}
+            colorFrom="#94a3b8"
+            colorTo="#e2e8f0"
+          />
         </span>
         <span className="voice-label">{LABELS[phase]}</span>
-        {/* Only while idle. Animating during a live call would compete with the phase
-            label, and the aria-label already carries the meaning for screen readers. */}
-        {phase === "idle" ? (
-          <span className="voice-cycle" aria-hidden="true">
-            <span>
-              {PROMPTS.map((prompt, index) => (
-                <b key={`${prompt}-${index}`}>{prompt}</b>
-              ))}
-            </span>
-          </span>
-        ) : null}
       </button>
       <span className="voice-status" role="status" aria-live="polite">{message}</span>
     </span>
