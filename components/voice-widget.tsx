@@ -612,7 +612,7 @@ export default function VoiceWidget() {
           <ParticlesOrb
             state={phaseToOrb(phase)}
             size={52}
-            speed={0.6}
+            speed={1.2}
             colorFrom="#4f46e5"
             colorTo="#a78bfa"
             levelRef={levelRef}
