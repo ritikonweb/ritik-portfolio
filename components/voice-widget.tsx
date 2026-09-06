@@ -119,6 +119,11 @@ export default function VoiceWidget() {
   const sessionRef = useRef<AgentSession | null>(null);
   const micRef = useRef<AgentMicrophone | null>(null);
   const playerRef = useRef<AgentPlayer | null>(null);
+  // Live audio level (0..1) fed to the orb. -1 means "no live signal, fall back to the
+  // state's synthetic energy". Driven from the SDK's own volume meters: the visitor's
+  // mic while listening, the agent's playback while speaking. Display only — reads
+  // volumes off the existing mic/player, never touches the session or its config.
+  const levelRef = useRef<number>(-1);
   const activeRef = useRef(false);
   const lastActivityRef = useRef(0);
   const startedAtRef = useRef(0);
@@ -257,6 +262,32 @@ export default function VoiceWidget() {
       teardown();
     };
   }, [teardown]);
+
+  // Feeds the orb a real audio level so it visibly reacts to sound: the visitor's mic
+  // while listening, the agent's playback while speaking. This is what makes the two
+  // modes look different — listening pulses with your voice, speaking pulses with the
+  // reply. Idle/connecting/thinking leave it at -1 so the orb uses its synthetic energy.
+  useEffect(() => {
+    if (phase !== "listening" && phase !== "speaking") {
+      levelRef.current = -1;
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      const live =
+        phase === "speaking"
+          ? playerRef.current?.getOutputVolume()
+          : micRef.current?.getInputVolume();
+      // Gentle floor + gain so quiet speech still moves the orb without clipping.
+      levelRef.current = typeof live === "number" ? Math.min(1, live * 1.6 + 0.12) : -1;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      levelRef.current = -1;
+    };
+  }, [phase]);
 
   /**
    * Arms the end of the conversation. Deliberately not tied to one event, because the
@@ -579,6 +610,7 @@ export default function VoiceWidget() {
             speed={1}
             colorFrom="#4f46e5"
             colorTo="#a78bfa"
+            levelRef={levelRef}
           />
         </span>
         <span className="voice-text">
