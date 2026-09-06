@@ -618,19 +618,21 @@ export default function VoiceWidget() {
             levelRef={levelRef}
           />
         </span>
-        <span className="voice-label">{phase === "idle" ? "Tap to ask" : LABELS[phase]}</span>
-      </button>
-      <span className="voice-sub" role="status" aria-live="polite">
-        {phase === "idle" && !message ? (
-          <span className="voice-cycle" aria-hidden="true">
-            <span>
-              {PROMPTS.map((prompt, index) => (
-                <b key={`${prompt}-${index}`}>{prompt}</b>
-              ))}
-            </span>
+        <span className="voice-label">
+          {phase === "idle" ? "Tap to ask" : LABELS[phase]}
+          <span className="voice-sub" role="status" aria-live="polite">
+            {phase === "idle" && !message ? (
+              <span className="voice-cycle" aria-hidden="true">
+                <span>
+                  {PROMPTS.map((prompt, index) => (
+                    <b key={`${prompt}-${index}`}>{prompt}</b>
+                  ))}
+                </span>
+              </span>
+            ) : message ?? null}
           </span>
-        ) : message ?? null}
-      </span>
+        </span>
+      </button>
     </span>
   );
 }
