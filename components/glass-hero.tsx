@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import posthog from "posthog-js";
 import site from "@/content/site.json";
 import VoiceWidget from "@/components/voice-widget";
+import SoundToggle from "@/components/sound-toggle";
+import { useSound } from "@/components/sound-provider";
 
 const DESKTOP_RADIUS = 235;
 const MOBILE_RADIUS = 250;
@@ -18,6 +20,7 @@ export default function GlassHero() {
   const frameId = useRef<number | null>(null);
   const reducedMotion = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { play } = useSound();
 
   useEffect(() => {
     const element = heroRef.current;
@@ -44,14 +47,19 @@ export default function GlassHero() {
   useEffect(() => {
     if (!menuOpen) return;
     const close = () => setMenuOpen(false);
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        play("close", { isUserGesture: true });
+        close();
+      }
+    };
     window.addEventListener("scroll", close, { passive: true });
     window.addEventListener("wheel", close, { passive: true });
     window.addEventListener("touchmove", close, { passive: true });
     window.addEventListener("resize", close);
     document.addEventListener("keydown", closeOnEscape);
     return () => { window.removeEventListener("scroll", close); window.removeEventListener("wheel", close); window.removeEventListener("touchmove", close); window.removeEventListener("resize", close); document.removeEventListener("keydown", closeOnEscape); };
-  }, [menuOpen]);
+  }, [menuOpen, play]);
 
   const setPoint = (event: ReactPointerEvent<HTMLDivElement>) => { const rect = event.currentTarget.getBoundingClientRect(); rawPosition.current = { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
   const handlePointerEnter = (event: ReactPointerEvent<HTMLDivElement>) => { if (event.pointerType === "mouse") { setPoint(event); targetRadius.current = DESKTOP_RADIUS; } };
@@ -60,20 +68,57 @@ export default function GlassHero() {
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { if (event.pointerType !== "mouse") { touchState.current = true; event.currentTarget.setPointerCapture(event.pointerId); setPoint(event); targetRadius.current = MOBILE_RADIUS; } };
   const endTouch = (event: ReactPointerEvent<HTMLDivElement>) => { if (event.pointerType !== "mouse") { touchState.current = false; targetRadius.current = 0; } };
 
+  const handleMenuToggle = () => {
+    setMenuOpen((open) => {
+      const next = !open;
+      play(next ? "open" : "close", { isUserGesture: true });
+      return next;
+    });
+  };
+
   return (
     <section className="glass-hero" aria-labelledby="hero-title">
       <header className="hero-header">
         <nav aria-label="Primary navigation" className="hero-nav">
-          <a className="brand" href="#main-content" aria-label={`${site.identity.name}, back to top`}>{site.identity.name}</a>
-          <button className="menu-toggle" type="button" aria-expanded={menuOpen} aria-controls="primary-links" aria-label={menuOpen ? "Close navigation" : "Open navigation"} onClick={() => setMenuOpen((open) => !open)}><span /><span /></button>
-          <div id="primary-links" className={`nav-links${menuOpen ? " is-open" : ""}`}>{site.navigation.map((item) => <a key={item.href} href={item.href} onClick={() => { setMenuOpen(false); posthog.capture("nav_item_clicked", { label: item.label, href: item.href }); }}>{item.label}</a>)}</div>
+          <a
+            className="brand"
+            href="#main-content"
+            aria-label={`${site.identity.name}, back to top`}
+            onClick={() => play("select", { isUserGesture: true })}
+          >
+            {site.identity.name}
+          </a>
+          <div className="hero-nav-actions">
+            <SoundToggle />
+            <button className="menu-toggle" type="button" aria-expanded={menuOpen} aria-controls="primary-links" aria-label={menuOpen ? "Close navigation" : "Open navigation"} onClick={handleMenuToggle}><span /><span /></button>
+          </div>
+          <div id="primary-links" className={`nav-links${menuOpen ? " is-open" : ""}`}>{site.navigation.map((item) => <a key={item.href} href={item.href} onClick={() => { play("select", { isUserGesture: true }); setMenuOpen(false); posthog.capture("nav_item_clicked", { label: item.label, href: item.href }); }}>{item.label}</a>)}</div>
         </nav>
       </header>
 
       <div className="hero-stage">
         <div className="hero-copy">
           <h1 id="hero-title" className="hero-heading" aria-label={site.hero.headingLines.join(" ")}>{site.hero.headingLines.map((line, index) => <span aria-hidden="true" key={`${line}-${index}`}>{line}</span>)}</h1>
-          <div className="hero-actions"><a className="pill-button" href={site.contact.resume} target="_blank" rel="noreferrer" onClick={() => posthog.capture("resume_downloaded")}>{site.hero.primaryAction}</a><VoiceWidget /></div>
+          <div className="hero-actions">
+            <a
+              className="pill-button"
+              href={site.contact.resume}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => {
+                play("open", { isUserGesture: true });
+                posthog.capture("resume_downloaded");
+              }}
+              onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") {
+                  play("hover", { isUserGesture: true, cooldownMs: 120 });
+                }
+              }}
+            >
+              {site.hero.primaryAction}
+            </a>
+            <VoiceWidget />
+          </div>
         </div>
         <div ref={heroRef} className="hero-media" onContextMenu={(e) => e.preventDefault()} onPointerEnter={handlePointerEnter} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onPointerDown={handlePointerDown} onPointerUp={endTouch} onPointerCancel={endTouch}>
           <img className="portrait-layer base-portrait" src="/images/Base_image_desktop.webp" width="1672" height="941" alt="Portrait of Ritik Yadav" fetchPriority="high" decoding="async" draggable={false} />

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import site from "@/content/site.json";
+import { useSound } from "@/components/sound-provider";
 
 type Post = { text: string; date: string; url: string; tags?: string[] };
 
@@ -12,8 +13,27 @@ const formatDate = (value: string) => {
 };
 
 function Card({ post, ariaHidden }: { post: Post; ariaHidden?: boolean }) {
+  const { play } = useSound();
+
   return (
-    <a className="li-card" href={post.url} target="_blank" rel="noreferrer" aria-hidden={ariaHidden} tabIndex={ariaHidden ? -1 : undefined}>
+    <a
+      className="li-card"
+      href={post.url}
+      target="_blank"
+      rel="noreferrer"
+      aria-hidden={ariaHidden}
+      tabIndex={ariaHidden ? -1 : undefined}
+      onClick={() => {
+        if (!ariaHidden) {
+          play("open", { isUserGesture: true });
+        }
+      }}
+      onPointerEnter={(e) => {
+        if (e.pointerType === "mouse" && !ariaHidden) {
+          play("hover", { isUserGesture: true, cooldownMs: 120 });
+        }
+      }}
+    >
       <span className="li-meta"><span className="li-badge">LinkedIn</span><time dateTime={post.date}>{formatDate(post.date)}</time></span>
       <p className="li-text">{post.text}</p>
       <span className="li-foot">{post.tags && post.tags.length > 0 ? <span className="li-tags">{post.tags.map((tag) => `#${tag}`).join(" ")}</span> : <span />}<span className="li-read">Read on LinkedIn <span aria-hidden="true">↗</span></span></span>
