@@ -5,7 +5,6 @@ import posthog from "posthog-js";
 import type { AgentMicrophone, AgentPlayer, AgentSession } from "@deepgram/agents";
 import { ParticlesOrb } from "@/registry/orbe/particles-orb/particles-orb";
 import type { OrbState } from "@/registry/lib/orb-state";
-import { useSound } from "@/components/sound-provider";
 
 type Phase = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
@@ -116,8 +115,6 @@ type WakeLockNavigator = Navigator & {
 export default function VoiceWidget() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const { play, startLoop, stopLoop } = useSound();
-  const connectingLoopRef = useRef<ReturnType<typeof startLoop> | null>(null);
 
   const sessionRef = useRef<AgentSession | null>(null);
   const micRef = useRef<AgentMicrophone | null>(null);
@@ -232,36 +229,17 @@ export default function VoiceWidget() {
 
     setPhase("idle");
     if (note !== undefined) setMessage(note);
-
-    if (connectingLoopRef.current) {
-      connectingLoopRef.current.stop();
-      connectingLoopRef.current = null;
-    }
-    stopLoop("connecting");
-
     if (wasActive) {
       console.info(`[voice] session ended after ${Math.round(sessionDurationMs / 1000)}s`);
-      if (note === GOODBYE_NOTE) {
-        play("complete");
-        posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
-      } else if (note !== null) {
+      if (note !== null) {
         if (note) {
           posthog.capture("voice_session_error", { error_message: note, session_duration_ms: sessionDurationMs });
-          if (/mic blocked|no microphone|mic in use/i.test(note)) {
-            play("blocked");
-          } else {
-            play("error");
-          }
         } else {
           posthog.capture("voice_session_ended", { session_duration_ms: sessionDurationMs });
-          play("disconnect", { isUserGesture: true });
         }
-      } else {
-        // User deliberately stopped (note === null)
-        play("disconnect", { isUserGesture: true });
       }
     }
-  }, [play, releaseWakeLock, saveTranscript, stopLoop]);
+  }, [releaseWakeLock, saveTranscript]);
 
   // The browser drops the wake lock whenever the page is hidden, so take it again on
   // return if a call is still running.
@@ -350,7 +328,6 @@ export default function VoiceWidget() {
 
     setPhase("connecting");
     activeRef.current = true;
-    connectingLoopRef.current = startLoop("connecting", { isUserGesture: true });
     const runId = (runIdRef.current += 1);
     // True only while this attempt is still the current one.
     const isCurrent = () => runIdRef.current === runId && activeRef.current;
@@ -466,7 +443,6 @@ export default function VoiceWidget() {
         // Barge-in: drop whatever is still queued so the agent stops mid sentence.
         player.interrupt();
         lastActivityRef.current = Date.now();
-        play("press");
         if (activeRef.current && !closingRef.current) setPhase("listening");
       });
 
@@ -554,12 +530,6 @@ export default function VoiceWidget() {
       session.on("settings-applied", () => {
         if (!isCurrent()) return;
         console.info("[voice] settings applied, agent ready");
-        if (connectingLoopRef.current) {
-          connectingLoopRef.current.stop();
-          connectingLoopRef.current = null;
-        }
-        stopLoop("connecting");
-        play("connect");
         setPhase("listening");
         setMessage("Connected");
       });
@@ -626,7 +596,7 @@ export default function VoiceWidget() {
         teardown("Couldn't connect. Try again.");
       }
     }
-  }, [armClose, cancelClose, play, requestWakeLock, startLoop, stopLoop, teardown]);
+  }, [armClose, cancelClose, requestWakeLock, teardown]);
 
   const toggle = useCallback(() => {
     if (phase === "idle") void start(0);
@@ -637,20 +607,7 @@ export default function VoiceWidget() {
 
   return (
     <span className="voice-widget">
-      <button
-        type="button"
-        className="voice-cta"
-        data-phase={phase}
-        onClick={toggle}
-        onPointerEnter={(e) => {
-          if (e.pointerType === "mouse" && phase === "idle") {
-            play("hover", { isUserGesture: true, cooldownMs: 120 });
-          }
-        }}
-        aria-pressed={busy}
-        title={HINTS[phase]}
-        aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Tap to ask, start a voice conversation with my AI"}
-      >
+      <button type="button" className="voice-cta" data-phase={phase} onClick={toggle} aria-pressed={busy} title={HINTS[phase]} aria-label={busy ? `${LABELS[phase]}. Tap to stop.` : "Tap to ask, start a voice conversation with my AI"}>
         <span className="voice-orb-wrap" aria-hidden="true">
           <ParticlesOrb
             state={phaseToOrb(phase)}

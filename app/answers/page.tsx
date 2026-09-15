@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { ANSWERS, NAME, SITE_URL } from "@/lib/profile";
-import BackLink from "@/components/back-link";
 
 /**
  * The answer page. Assistants quote passages that already read like an answer to the
@@ -89,7 +88,7 @@ export default function AnswersPage() {
           </div>
 
           <p className="footer-line" style={{ borderTop: "1px solid var(--line)", color: "var(--muted)" }}>
-            <BackLink href="/">Back to the portfolio</BackLink>
+            <a href="/">Back to the portfolio</a>
           </p>
         </div>
       </section>

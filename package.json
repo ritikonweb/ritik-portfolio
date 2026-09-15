@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/sound.test.mjs",
     "check:agents": "node scripts/check-agent-endpoints.mjs",
     "queries": "node scripts/aeo-queries.mjs",
     "indexnow": "node scripts/indexnow.mjs"
@@ -19,8 +18,7 @@
     "posthog-js": "^1.407.3",
     "posthog-node": "^5.46.1",
     "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "uisfx": "^0.4.0"
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@types/node": "22.15.30",

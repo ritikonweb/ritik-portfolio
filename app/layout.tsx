@@ -3,7 +3,6 @@ import { Albert_Sans, Fragment_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { PHProvider } from "@/app/providers";
 import site from "@/content/site.json";
-import { SoundProvider } from "@/components/sound-provider";
 import "./globals.css";
 
 const albert = Albert_Sans({ subsets: ["latin"], variable: "--font-albert", display: "swap" });
@@ -122,9 +121,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang={site.metadata.language} className={`${albert.variable} ${fragment.variable}`}>
       <body>
         <PHProvider>
-          <SoundProvider>
-            {children}
-          </SoundProvider>
+          {children}
         </PHProvider>
         <Analytics />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
