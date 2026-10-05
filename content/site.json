@@ -178,9 +178,14 @@
     "title": "Products built from real problems.",
     "items": [
       {
-        "name": "InterVuex",
-        "description": "AI co-pilot that structures in-person interview data and generates consistent reports.",
-        "url": "https://www.linkedin.com/posts/yadavritik_hiring-hrtech-inpersoninterviews-activity-7417629708479250432-_rAy"
+        "name": "WABEXO",
+        "description": "WhatsApp marketing and CRM platform for businesses, offering team inboxes, lead management, broadcasts, automation, AI assistance, and analytics.",
+        "url": "https://wabexo.ritik.co.in/"
+      },
+      {
+        "name": "RERA Atlas (Karnataka)",
+        "url": "https://rera.ritik.co.in/",
+        "description": "AI-powered real estate directory providing instant search, developer analytics, and unit breakdowns across Karnataka RERA."
       },
       {
         "name": "Before You Send",
@@ -188,19 +193,19 @@
         "url": "https://chromewebstore.google.com/detail/khgjacjeiohgfjldnebdnhbiccidjdlf"
       },
       {
-        "name": "Aura Meetings",
-        "description": "Meeting intelligence tool that turns raw audio into decisions, actions, and ownership.",
-        "url": "https://aurameetings.vercel.app/"
-      },
-      {
         "name": "BrowseMind",
         "description": "Private browser memory that retrieves previously viewed pages using natural-language search.",
         "url": "https://chromewebstore.google.com/detail/browsemind/ieagohlhcladofcddmcmalahipdfamfj?hl=en"
       },
       {
-        "name": "RERA Atlas (Karnataka)",
-        "url": "https://rera.ritik.co.in/",
-        "description": "AI-powered real estate directory providing instant search, developer analytics, and unit breakdowns across Karnataka RERA."
+        "name": "Aura Meetings",
+        "description": "Meeting intelligence tool that turns raw audio into decisions, actions, and ownership.",
+        "url": "https://aurameetings.vercel.app/"
+      },
+      {
+        "name": "InterVuex",
+        "description": "AI co-pilot that structures in-person interview data and generates consistent reports.",
+        "url": "https://www.linkedin.com/posts/yadavritik_hiring-hrtech-inpersoninterviews-activity-7417629708479250432-_rAy"
       }
     ]
   },
